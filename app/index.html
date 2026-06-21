@@ -1,0 +1,2346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0a0a0f"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<meta name="description" content="PLANR — Your aesthetic daily planner"/>
+<title>PLANR ✦ Aesthetic Planner</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+<style>
+  /* ── TOKENS ── */
+  :root {
+    --bg:          #07070d;
+    --bg2:         #0d0d1a;
+    --glass:       rgba(255,255,255,0.04);
+    --glass-mid:   rgba(255,255,255,0.08);
+    --glass-hi:    rgba(255,255,255,0.13);
+    --border:      rgba(255,255,255,0.08);
+    --border-hi:   rgba(160,110,255,0.35);
+
+    --neon-purple:  #a06eff;
+    --neon-pink:    #ff5fcb;
+    --neon-cyan:    #3ff0e0;
+    --neon-yellow:  #ffe156;
+    --neon-green:   #39ff88;
+
+    --text:        #f0ecff;
+    --text-muted:  rgba(240,236,255,0.45);
+    --text-dim:    rgba(240,236,255,0.25);
+
+    --radius-sm:   10px;
+    --radius:      18px;
+    --radius-lg:   26px;
+
+    --font-display: 'Syne', sans-serif;
+    --font-body:    'Space Grotesk', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── APP SHELL ── */
+  #app {
+    display: flex; flex-direction: column;
+    height: 100dvh; width: 100%;
+    position: relative; overflow: hidden;
+  }
+
+  /* ── AMBIENT BG ── */
+  .ambient {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    overflow: hidden;
+  }
+  .orb {
+    position: absolute; border-radius: 50%; filter: blur(80px); opacity: .28;
+    animation: drift 12s ease-in-out infinite alternate;
+  }
+  .orb1 { width: 380px; height: 380px; background: var(--neon-purple); top: -100px; left: -80px; animation-delay: 0s; }
+  .orb2 { width: 300px; height: 300px; background: var(--neon-pink);   bottom: 80px;  right: -60px; animation-delay: -4s; }
+  .orb3 { width: 200px; height: 200px; background: var(--neon-cyan);   top: 40%;  left: 30%;  animation-delay: -7s; }
+  @keyframes drift {
+    from { transform: translate(0,0) scale(1); }
+    to   { transform: translate(30px, 20px) scale(1.08); }
+  }
+
+  /* Grid lines overlay */
+  .grid-overlay {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(160,110,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(160,110,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ── SCREENS ── */
+  .screens { flex: 1; position: relative; overflow: hidden; z-index: 1; }
+  .screen {
+    position: absolute; inset: 0;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 0 16px 16px;
+    opacity: 0; pointer-events: none;
+    transform: translateY(12px);
+    transition: opacity .3s ease, transform .3s ease;
+  }
+  .screen.active {
+    opacity: 1; pointer-events: all; transform: none;
+  }
+  .screen::-webkit-scrollbar { display: none; }
+
+  /* ── TOP HEADER ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0 12px;
+    background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+  }
+  .topbar-logo {
+    font-family: var(--font-display);
+    font-size: 22px; font-weight: 800; letter-spacing: -1px;
+    background: linear-gradient(120deg, var(--neon-purple), var(--neon-pink));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .topbar-sub { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+    display: grid; place-items: center;
+    font-size: 14px; font-weight: 700; color: #fff;
+    border: 2px solid var(--border-hi);
+    cursor: pointer; flex-shrink: 0;
+  }
+
+  /* ── GLASS CARD ── */
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 18px;
+    transition: border-color .2s, background .2s;
+  }
+  .card:hover { border-color: var(--border-hi); background: var(--glass-mid); }
+  .card-sm { border-radius: var(--radius-sm); padding: 14px; }
+  .card-glow {
+    box-shadow: 0 0 0 1px var(--border-hi), 0 8px 32px rgba(160,110,255,.15);
+  }
+
+  /* ── SECTION LABEL ── */
+  .sec-label {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--neon-purple); margin-bottom: 10px; display: block;
+  }
+  .sec-title {
+    font-family: var(--font-display); font-size: 20px; font-weight: 800;
+    letter-spacing: -0.5px; margin-bottom: 14px;
+  }
+
+  /* ── BADGE / TAG ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-family: var(--font-mono); font-weight: 500;
+    padding: 3px 9px; border-radius: 99px;
+    border: 1px solid; letter-spacing: .5px;
+  }
+  .badge-purple { color: var(--neon-purple); border-color: rgba(160,110,255,.3); background: rgba(160,110,255,.08); }
+  .badge-pink   { color: var(--neon-pink);   border-color: rgba(255,95,203,.3);  background: rgba(255,95,203,.08); }
+  .badge-cyan   { color: var(--neon-cyan);   border-color: rgba(63,240,224,.3);  background: rgba(63,240,224,.08); }
+  .badge-green  { color: var(--neon-green);  border-color: rgba(57,255,136,.3);  background: rgba(57,255,136,.08); }
+  .badge-yellow { color: var(--neon-yellow); border-color: rgba(255,225,86,.3);  background: rgba(255,225,86,.08); }
+
+  /* ── PROGRESS BAR ── */
+  .prog-wrap { background: rgba(255,255,255,.07); border-radius: 99px; height: 5px; overflow: hidden; }
+  .prog-fill  { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+  .prog-purple { background: linear-gradient(90deg, var(--neon-purple), var(--neon-pink)); }
+  .prog-cyan   { background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); }
+
+  /* ── CHECKBOX ── */
+  .task-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 0; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: opacity .2s;
+  }
+  .task-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .task-item.done { opacity: .45; }
+  .cb {
+    width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
+    border: 1.5px solid var(--border-hi);
+    display: grid; place-items: center;
+    transition: background .2s, border-color .2s;
+    margin-top: 1px;
+  }
+  .task-item.done .cb {
+    background: var(--neon-purple); border-color: var(--neon-purple);
+  }
+  .cb-check { display: none; color: #fff; font-size: 11px; font-weight: 700; }
+  .task-item.done .cb-check { display: block; }
+  .task-text { flex: 1; font-size: 14px; line-height: 1.5; }
+  .task-item.done .task-text { text-decoration: line-through; color: var(--text-muted); }
+  .task-meta { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); margin-top: 2px; }
+
+  /* ── HABIT ROW ── */
+  .habit-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 0; border-bottom: 1px solid var(--border);
+  }
+  .habit-row:last-child { border-bottom: none; }
+  .habit-row-v2 { flex-direction: column; align-items: stretch; gap: 10px; padding: 16px 0; }
+  .habit-row-top { display: flex; align-items: center; justify-content: space-between; }
+  .habit-progress-row { width: 100%; }
+  .habit-prog-wrap { height: 7px; }
+  .week-bars-row { display: flex; justify-content: space-between; gap: 4px; padding-top: 2px; }
+  .week-bar-target {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    padding: 4px 0; min-height: 44px; justify-content: flex-end;
+  }
+  .week-bar-track {
+    width: 14px; height: 18px; border-radius: 4px;
+    background: rgba(255,255,255,.05); display: flex; align-items: flex-end;
+    overflow: hidden;
+  }
+  .week-bar-fill { width: 100%; border-radius: 3px; transition: height .3s ease, background .2s; }
+  .week-bar-label { font-size: 9px; font-family: var(--font-mono); color: var(--text-dim); }
+  .week-bar-future { cursor: default; opacity: .5; }
+  .habit-left { display: flex; align-items: center; gap: 12px; }
+  .habit-icon {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 18px;
+    background: var(--glass-mid); border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .habit-name { font-size: 14px; font-weight: 500; }
+  .habit-streak { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+  .dots { display: flex; gap: 2px; }
+  .dot-target {
+    width: 28px; height: 28px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--border); border: 1px solid var(--border);
+    transition: background .15s, transform .15s; pointer-events: none;
+  }
+  .dot.filled { background: var(--neon-purple); border-color: var(--neon-purple); }
+  .dot-target:active .dot { transform: scale(1.5); }
+
+  .edit-target {
+    width: 28px; height: 28px; flex-shrink: 0; margin-left: 2px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 13px; color: var(--text-muted);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .15s, color .15s;
+  }
+  .edit-target:active { background: var(--glass-mid); color: var(--neon-cyan); }
+  .timeline-row .edit-target { margin-top: -2px; }
+
+  /* ── MOOD GRID ── */
+  .mood-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+    margin-bottom: 20px;
+  }
+  .mood-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 12px 4px; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--glass); cursor: pointer;
+    transition: border-color .2s, background .2s, transform .15s;
+    font-size: 22px;
+  }
+  .mood-btn span { font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); letter-spacing: .5px; }
+  .mood-btn:active { transform: scale(.94); }
+  .mood-btn.selected { border-color: var(--neon-purple); background: rgba(160,110,255,.12); }
+
+  /* ── QUOTE CARD ── */
+  .quote-card {
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, rgba(160,110,255,.12), rgba(255,95,203,.08));
+    border: 1px solid rgba(160,110,255,.25);
+    border-radius: var(--radius-lg); padding: 22px;
+    margin-bottom: 16px;
+  }
+  .quote-card::before {
+    content: '"'; position: absolute;
+    top: -10px; left: 12px;
+    font-size: 120px; font-family: var(--font-display);
+    color: rgba(160,110,255,.12); line-height: 1; pointer-events: none;
+  }
+  .quote-text { font-size: 15px; line-height: 1.65; font-style: italic; position: relative; }
+  .quote-author { font-size: 11px; color: var(--neon-purple); font-family: var(--font-mono); margin-top: 10px; }
+
+  /* ── STATS ROW ── */
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card {
+    background: var(--glass); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .stat-num {
+    font-family: var(--font-display); font-size: 28px; font-weight: 800;
+    background: linear-gradient(120deg, var(--neon-purple), var(--neon-pink));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); letter-spacing: .5px; }
+
+  /* ── BUTTON ── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 12px 20px; border-radius: 99px; border: none;
+    font-family: var(--font-body); font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: transform .15s, box-shadow .2s; outline: none;
+  }
+  .btn:active { transform: scale(.96); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(160,110,255,.35);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 32px rgba(160,110,255,.5); }
+  .btn-ghost {
+    background: var(--glass-mid); color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-full { width: 100%; }
+
+  /* ── FAB ── */
+  .fab {
+    position: fixed; bottom: calc(76px + var(--safe-bottom)); right: 18px;
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+    display: grid; place-items: center; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(160,110,255,.5);
+    z-index: 20; border: none; color: #fff; font-size: 22px;
+    transition: transform .2s, box-shadow .2s;
+  }
+  .fab:active { transform: scale(.9); }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: relative; z-index: 10;
+    display: flex; align-items: center;
+    background: rgba(10,10,20,.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid var(--border);
+    padding-bottom: var(--safe-bottom);
+    height: calc(64px + var(--safe-bottom));
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px; cursor: pointer; padding: 8px 0;
+    transition: opacity .2s;
+  }
+  .nav-icon { font-size: 20px; transition: transform .2s; }
+  .nav-label { font-size: 10px; font-family: var(--font-mono); letter-spacing: .5px; color: var(--text-muted); }
+  .nav-item.active .nav-icon { transform: scale(1.15); }
+  .nav-item.active .nav-label { color: var(--neon-purple); }
+  .nav-pip {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--neon-purple);
+    display: none;
+  }
+  .nav-item.active .nav-pip { display: block; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.6); backdrop-filter: blur(8px);
+    display: flex; align-items: flex-end;
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal-sheet {
+    width: 100%; background: #13131f;
+    border-radius: 24px 24px 0 0;
+    border-top: 1px solid var(--border);
+    padding: 20px 20px calc(20px + var(--safe-bottom));
+    transform: translateY(100%);
+    transition: transform .35s cubic-bezier(.4,0,.2,1);
+  }
+  .modal-overlay.open .modal-sheet { transform: translateY(0); }
+  .modal-handle {
+    width: 36px; height: 4px; border-radius: 99px;
+    background: var(--border); margin: 0 auto 20px;
+  }
+  .modal-title {
+    font-family: var(--font-display); font-size: 20px; font-weight: 800;
+    margin-bottom: 18px;
+  }
+
+  /* ── INPUT ── */
+  .input {
+    width: 100%; background: var(--glass-mid);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-family: var(--font-body); font-size: 14px;
+    padding: 12px 14px; outline: none; transition: border-color .2s;
+    margin-bottom: 12px;
+  }
+  .input:focus { border-color: var(--neon-purple); }
+  .input::placeholder { color: var(--text-dim); }
+  select.input { appearance: none; }
+
+  /* Visible label for native inputs (time/date) whose placeholder attribute browsers ignore */
+  .field-label {
+    font-size: 11px; font-family: var(--font-mono); font-weight: 500;
+    color: var(--text-muted); letter-spacing: .5px;
+    margin: -2px 0 6px 2px;
+  }
+
+  /* Native time picker text + icon color (default browser styling is hard to read on dark bg) */
+  input[type="time"] { color-scheme: dark; }
+
+  /* ── FOCUS STATE (keyboard nav / accessibility) ── */
+  [role="button"]:focus-visible,
+  .btn:focus-visible,
+  .input:focus-visible {
+    outline: 2px solid var(--neon-cyan);
+    outline-offset: 2px;
+  }
+
+  /* ── TIMELINE ── */
+  .timeline-row {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-sm); transition: background .3s, box-shadow .3s;
+  }
+  .timeline-row:last-child { border-bottom: none; }
+
+  /* Plain block currently in progress: subtle cyan highlight */
+  .timeline-row-active {
+    background: rgba(63,240,224,.06);
+    box-shadow: inset 3px 0 0 var(--neon-cyan);
+    padding-left: 8px; margin: 0 -8px;
+  }
+  /* Habit-linked block currently in progress: stronger glow, since a streak is on the line */
+  .timeline-row-active-habit {
+    background: rgba(57,255,136,.08);
+    box-shadow: inset 3px 0 0 var(--neon-green), 0 0 20px rgba(57,255,136,.12);
+    padding-left: 8px; margin: 0 -8px;
+    animation: pulse-glow 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--neon-green), 0 0 20px rgba(57,255,136,.12); }
+    50% { box-shadow: inset 3px 0 0 var(--neon-green), 0 0 28px rgba(57,255,136,.22); }
+  }
+  .tl-live-badge { margin-top: 6px; display: inline-flex; }
+
+  .tl-time {
+    font-size: 11px; font-family: var(--font-mono); color: var(--neon-cyan);
+    width: 40px; flex-shrink: 0; padding-top: 2px;
+  }
+  .tl-dot-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .tl-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid var(--neon-purple); background: var(--bg);
+    margin-top: 3px;
+  }
+  .tl-line { flex: 1; width: 1px; background: var(--border); min-height: 30px; margin-top: 4px; }
+  .tl-content { flex: 1; }
+  .tl-title { font-size: 14px; font-weight: 500; }
+  .tl-sub { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+
+  /* ── CHIPS ── */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip {
+    padding: 6px 14px; border-radius: 99px;
+    border: 1px solid var(--border); background: var(--glass);
+    font-size: 12px; font-family: var(--font-mono);
+    color: var(--text-muted); cursor: pointer; transition: all .2s;
+  }
+  .chip.active { border-color: var(--neon-purple); color: var(--neon-purple); background: rgba(160,110,255,.1); }
+
+  /* ── STREAK FLAMES ── */
+  .streak-row { display: flex; gap: 6px; align-items: center; }
+  .flame { font-size: 18px; animation: flicker 1.4s ease-in-out infinite alternate; }
+  @keyframes flicker { from { opacity: .8; transform: scale(1); } to { opacity: 1; transform: scale(1.1); } }
+  .streak-num { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--neon-yellow); }
+  .streak-label { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* spacing helpers */
+  .gap8  { height: 8px; }
+  .gap12 { height: 12px; }
+  .gap16 { height: 16px; }
+
+  /* ── INSTALL BANNER ── */
+  /* ── ONBOARDING OVERLAY ── */
+  .onboarding-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .onboarding-overlay.hidden { display: none; }
+  .onboarding-card {
+    width: 100%; max-width: 360px; height: 100%; max-height: 640px;
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .onboarding-step-scroll {
+    flex: 1; overflow-y: auto; min-height: 0;
+  }
+  .onboarding-progress { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; flex-shrink: 0; }
+  .onboarding-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s, transform .2s; }
+  .onboarding-dot.active { background: var(--neon-purple); transform: scale(1.3); }
+  .onboarding-dot.complete { background: var(--neon-purple); }
+
+  .onboarding-step { display: none; text-align: center; }
+  .onboarding-step.active { display: block; animation: ob-fade-in .3s ease; }
+  @keyframes ob-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .onboarding-emoji { font-size: 40px; margin-bottom: 16px; }
+  .onboarding-title { font-family: var(--font-display); font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .onboarding-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; line-height: 1.5; }
+  .onboarding-input { text-align: center; font-size: 16px; margin-bottom: 0; }
+
+  .onboarding-goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .onboarding-goal-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 20px 10px; border-radius: var(--radius); border: 1.5px solid var(--border);
+    background: var(--glass); cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: border-color .2s, background .2s, transform .15s;
+  }
+  .onboarding-goal-btn:active { transform: scale(.96); }
+  .onboarding-goal-btn.selected { border-color: var(--neon-purple); background: rgba(160,110,255,.12); }
+  .onboarding-goal-icon { font-size: 26px; }
+
+  .onboarding-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; gap: 12px; flex-shrink: 0; }
+  .onboarding-nav .btn { flex: 1; }
+  .onboarding-error { font-size: 12px; color: var(--neon-pink); font-family: var(--font-mono); margin-top: 10px; min-height: 16px; flex-shrink: 0; }
+
+  .onboarding-habit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .onboarding-habit-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 14px 8px; border-radius: var(--radius); border: 1.5px solid var(--border);
+    background: var(--glass); cursor: pointer; font-size: 12px; font-weight: 500;
+    transition: border-color .2s, background .2s, transform .15s;
+  }
+  .onboarding-habit-btn:active { transform: scale(.96); }
+  .onboarding-habit-btn.selected { border-color: var(--neon-purple); background: rgba(160,110,255,.12); }
+  .onboarding-habit-icon { font-size: 22px; }
+
+  .onboarding-custom-habit-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .onboarding-custom-habit-row .input { margin-bottom: 0; text-align: left; }
+  .onboarding-custom-habit-row .btn { flex-shrink: 0; padding: 12px 16px; }
+  .onboarding-custom-habit-list { display: flex; flex-direction: column; gap: 6px; }
+  .onboarding-custom-habit-chip {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-radius: var(--radius-sm); background: var(--glass-mid);
+    border: 1px solid var(--border); font-size: 13px;
+  }
+  .onboarding-custom-habit-remove { color: var(--neon-pink); cursor: pointer; font-size: 16px; padding: 0 4px; }
+
+  .onboarding-time-review-list { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+  .onboarding-time-review-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 14px; border-radius: var(--radius-sm); background: var(--glass);
+    border: 1px solid var(--border);
+  }
+  .onboarding-time-review-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+  .onboarding-time-review-row input[type="time"] {
+    background: var(--glass-mid); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 6px 8px;
+    color-scheme: dark; width: 110px;
+  }
+  .onboarding-no-habits-msg { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); text-align: center; padding: 16px 0; }
+
+  #installBanner {
+    position: fixed; top: 12px; left: 12px; right: 12px; z-index: 100;
+    background: rgba(13,13,26,.95); border: 1px solid var(--neon-purple);
+    border-radius: var(--radius); padding: 14px 16px;
+    display: none; gap: 12px; align-items: center;
+    backdrop-filter: blur(20px); box-shadow: 0 8px 32px rgba(160,110,255,.25);
+  }
+  #installBanner.show { display: flex; }
+  .install-icon { font-size: 28px; flex-shrink: 0; }
+  .install-text { flex: 1; }
+  .install-text strong { display: block; font-size: 13px; margin-bottom: 2px; }
+  .install-text span { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+  .install-btn {
+    background: var(--neon-purple); color: #fff;
+    border: none; border-radius: 99px; padding: 7px 14px;
+    font-size: 12px; font-weight: 600; font-family: var(--font-body);
+    cursor: pointer; flex-shrink: 0;
+  }
+  .install-close {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 18px; cursor: pointer; padding: 0 0 0 6px; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- FIRST-RUN ONBOARDING -->
+<div id="onboardingOverlay" class="onboarding-overlay">
+  <div class="onboarding-card">
+    <div class="onboarding-progress">
+      <div class="onboarding-dot active" data-step="1"></div>
+      <div class="onboarding-dot" data-step="2"></div>
+      <div class="onboarding-dot" data-step="3"></div>
+      <div class="onboarding-dot" data-step="4"></div>
+      <div class="onboarding-dot" data-step="5"></div>
+      <div class="onboarding-dot" data-step="6"></div>
+      <div class="onboarding-dot" data-step="7"></div>
+    </div>
+
+    <div class="onboarding-step-scroll">
+    <!-- Step 1: Name -->
+    <div class="onboarding-step active" data-step="1">
+      <div class="onboarding-emoji">✦</div>
+      <div class="onboarding-title">Welcome to PLANR</div>
+      <div class="onboarding-sub">What should we call you?</div>
+      <input class="input onboarding-input" id="obName" placeholder="Your name" type="text" aria-label="Your name"/>
+    </div>
+
+    <!-- Step 2: Age -->
+    <div class="onboarding-step" data-step="2">
+      <div class="onboarding-emoji">🎂</div>
+      <div class="onboarding-title">How old are you?</div>
+      <div class="onboarding-sub">Just so we can tailor things a bit</div>
+      <input class="input onboarding-input" id="obAge" placeholder="Age" type="number" min="1" max="120" inputmode="numeric" aria-label="Your age"/>
+    </div>
+
+    <!-- Step 3: Height -->
+    <div class="onboarding-step" data-step="3">
+      <div class="onboarding-emoji">📏</div>
+      <div class="onboarding-title">What's your height?</div>
+      <div class="onboarding-sub">Used together with weight for your stats</div>
+      <input class="input onboarding-input" id="obHeight" placeholder="Height in cm (e.g. 170)" type="number" min="50" max="250" inputmode="numeric" aria-label="Your height in centimeters"/>
+    </div>
+
+    <!-- Step 4: Weight -->
+    <div class="onboarding-step" data-step="4">
+      <div class="onboarding-emoji">⚖️</div>
+      <div class="onboarding-title">What's your weight?</div>
+      <div class="onboarding-sub">This stays private, just for your profile stats</div>
+      <input class="input onboarding-input" id="obWeight" placeholder="Weight in kg (e.g. 60)" type="number" min="10" max="400" inputmode="numeric" aria-label="Your weight in kilograms"/>
+    </div>
+
+    <!-- Step 5: Goal -->
+    <div class="onboarding-step" data-step="5">
+      <div class="onboarding-emoji">🎯</div>
+      <div class="onboarding-title">What's your main goal?</div>
+      <div class="onboarding-sub">We'll shape your profile around this</div>
+      <div class="onboarding-goal-grid" id="obGoalGrid">
+        <div class="onboarding-goal-btn" data-goal="habits" onclick="selectGoal(this)">
+          <div class="onboarding-goal-icon">🔥</div>
+          <div>Build Habits</div>
+        </div>
+        <div class="onboarding-goal-btn" data-goal="focus" onclick="selectGoal(this)">
+          <div class="onboarding-goal-icon">🎯</div>
+          <div>Stay Focused</div>
+        </div>
+        <div class="onboarding-goal-btn" data-goal="fitness" onclick="selectGoal(this)">
+          <div class="onboarding-goal-icon">💪</div>
+          <div>Get Fit</div>
+        </div>
+        <div class="onboarding-goal-btn" data-goal="balance" onclick="selectGoal(this)">
+          <div class="onboarding-goal-icon">🌙</div>
+          <div>Find Balance</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6: Habit selection -->
+    <div class="onboarding-step" data-step="6">
+      <div class="onboarding-emoji">🌱</div>
+      <div class="onboarding-title">Pick your habits</div>
+      <div class="onboarding-sub">We'll schedule reminders and daily tasks for these automatically</div>
+      <div class="onboarding-habit-grid" id="obHabitGrid">
+        <!-- populated by JS from CURATED_HABITS -->
+      </div>
+      <div class="onboarding-custom-habit-row">
+        <input class="input" id="obCustomHabitInput" placeholder="Or type your own habit..." type="text" aria-label="Custom habit name"/>
+        <button class="btn btn-ghost" id="obAddCustomHabitBtn" onclick="addCustomOnboardingHabit()">Add</button>
+      </div>
+      <div id="obCustomHabitList" class="onboarding-custom-habit-list"></div>
+    </div>
+
+    <!-- Step 7: Time review for chosen habits -->
+    <div class="onboarding-step" data-step="7">
+      <div class="onboarding-emoji">🔔</div>
+      <div class="onboarding-title">When should we remind you?</div>
+      <div class="onboarding-sub">We picked sensible defaults — adjust any you'd like</div>
+      <div id="obTimeReviewList" class="onboarding-time-review-list">
+        <!-- populated by JS based on habits selected in step 6 -->
+      </div>
+    </div>
+    </div>
+
+    <div class="onboarding-error" id="obError"></div>
+    <div class="onboarding-nav">
+      <button class="btn btn-ghost" id="obBackBtn" onclick="onboardingBack()" style="visibility:hidden;">Back</button>
+      <button class="btn btn-primary" id="obNextBtn" onclick="onboardingNext()">Next ✦</button>
+    </div>
+  </div>
+</div>
+
+<!-- INSTALL BANNER -->
+<div id="installBanner">
+  <div class="install-icon">✦</div>
+  <div class="install-text">
+    <strong>Install PLANR</strong>
+    <span>Add to home screen for full app experience</span>
+  </div>
+  <button class="install-btn" id="installBtn">Install</button>
+  <button class="install-close" id="closeBanner">×</button>
+</div>
+
+<div id="app">
+  <!-- AMBIENT -->
+  <div class="ambient">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+  <div class="grid-overlay"></div>
+
+  <!-- SCREENS -->
+  <div class="screens">
+
+    <!-- ══ TODAY SCREEN ══ -->
+    <div class="screen active" id="screen-today">
+      <div class="topbar">
+        <div>
+          <div class="topbar-logo">PLANR ✦</div>
+          <div class="topbar-sub" id="todayDate">Loading...</div>
+        </div>
+        <div class="avatar" onclick="navigate('profile')">Y</div>
+      </div>
+
+      <!-- Quote -->
+      <div class="quote-card">
+        <div class="quote-text" id="quoteText">She designed a life she loved — one day at a time.</div>
+        <div class="quote-author" id="quoteAuthor">— PLANR DAILY</div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-num" id="tasksCompletedNum">0</div>
+          <div class="stat-label">TASKS DONE</div>
+          <div class="gap8"></div>
+          <div class="prog-wrap"><div class="prog-fill prog-purple" id="taskProgress" style="width:0%"></div></div>
+        </div>
+        <div class="stat-card">
+          <div class="streak-row">
+            <div class="flame">🔥</div>
+            <div class="streak-num" id="streakNum">7</div>
+          </div>
+          <div class="stat-label">DAY STREAK</div>
+          <div class="gap8"></div>
+          <div class="badge badge-yellow">ON FIRE</div>
+        </div>
+      </div>
+
+      <!-- Tasks -->
+      <div class="card card-glow" style="margin-bottom:16px">
+        <span class="sec-label">✦ TODAY'S TASKS</span>
+        <div id="taskList"></div>
+      </div>
+
+      <!-- Mood check -->
+      <div class="card" style="margin-bottom:16px">
+        <span class="sec-label">✦ MOOD CHECK-IN</span>
+        <div class="sec-title" style="font-size:15px;margin-bottom:14px;">How are you feeling right now?</div>
+        <div class="mood-grid" id="moodGrid">
+          <div class="mood-btn" data-mood="Thriving" onclick="selectMood(this)">😤<span>THRIVING</span></div>
+          <div class="mood-btn" data-mood="Happy" onclick="selectMood(this)">😊<span>HAPPY</span></div>
+          <div class="mood-btn" data-mood="Meh" onclick="selectMood(this)">😐<span>MEH</span></div>
+          <div class="mood-btn" data-mood="Tired" onclick="selectMood(this)">😴<span>TIRED</span></div>
+          <div class="mood-btn" data-mood="Stressed" onclick="selectMood(this)">😰<span>STRESSED</span></div>
+        </div>
+        <div id="moodMsg" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);display:none;"></div>
+      </div>
+
+      <div class="gap16"></div>
+    </div>
+
+    <!-- ══ SCHEDULE SCREEN ══ -->
+    <div class="screen" id="screen-schedule">
+      <div class="topbar">
+        <div>
+          <div class="topbar-logo" style="font-size:18px;">Schedule</div>
+          <div class="topbar-sub">TIME BLOCKS</div>
+        </div>
+        <div class="badge badge-cyan">TODAY</div>
+      </div>
+
+      <!-- Day chips -->
+      <div class="chips" id="dayChips"></div>
+
+      <!-- Timeline -->
+      <div class="card card-glow" style="margin-bottom:16px">
+        <span class="sec-label">✦ TIME BLOCKS</span>
+        <div id="timeline"></div>
+      </div>
+
+      <div class="gap16"></div>
+    </div>
+
+    <!-- ══ HABITS SCREEN ══ -->
+    <div class="screen" id="screen-habits">
+      <div class="topbar">
+        <div>
+          <div class="topbar-logo" style="font-size:18px;">Habits</div>
+          <div class="topbar-sub">BUILD YOUR RITUAL</div>
+        </div>
+        <div class="streak-row">
+          <div class="flame" style="font-size:14px;">🔥</div>
+          <div class="streak-num" style="font-size:16px;" id="habitStreak">7</div>
+        </div>
+      </div>
+
+      <!-- Weekly overview -->
+      <div class="card" style="margin-bottom:16px">
+        <span class="sec-label">✦ TODAY'S PROGRESS</span>
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px;align-items:center;">
+          <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Across all habits</div>
+          <div class="badge badge-green" id="weekPercent">0% done</div>
+        </div>
+        <div class="prog-wrap"><div class="prog-fill prog-cyan" id="weekProgress" style="width:0%"></div></div>
+      </div>
+
+      <!-- Habit list -->
+      <div class="card card-glow" style="margin-bottom:16px">
+        <span class="sec-label">✦ YOUR HABITS</span>
+        <div id="habitList"></div>
+      </div>
+
+      <!-- Notification toggle -->
+      <div class="card" style="margin-bottom:16px">
+        <span class="sec-label">✦ REMINDERS</span>
+        <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);line-height:1.6;margin-bottom:12px;">
+          Get notified when a linked habit's scheduled time arrives. Link a habit to a schedule block when adding it. Works while PLANR is open or running in a background tab.
+        </div>
+        <button class="btn btn-primary btn-full" id="notifToggleBtn" onclick="toggleNotifications()">🔕 Enable habit reminders</button>
+      </div>
+
+      <div class="gap16"></div>
+    </div>
+
+    <!-- ══ PROFILE SCREEN ══ -->
+    <div class="screen" id="screen-profile">
+      <div class="topbar">
+        <div>
+          <div class="topbar-logo" style="font-size:18px;">Profile</div>
+          <div class="topbar-sub">YOUR VIBE ✦</div>
+        </div>
+      </div>
+
+      <!-- Profile hero -->
+      <div class="card card-glow" style="margin-bottom:16px;text-align:center;padding:28px">
+        <div id="profileAvatar" style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--neon-purple),var(--neon-pink));display:grid;place-items:center;font-size:28px;font-weight:800;color:#fff;margin:0 auto 14px;border:3px solid rgba(160,110,255,.4)">Y</div>
+        <div id="profileName" style="font-family:var(--font-display);font-size:20px;font-weight:800;margin-bottom:4px">Youth Planner</div>
+        <div id="profileMeta" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">@planr.user ✦ since 2025</div>
+        <div class="gap12"></div>
+        <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap" id="profileGoalBadge">
+          <div class="badge badge-purple">✦ CONSISTENT</div>
+          <div class="badge badge-pink">🔥 ON STREAK</div>
+          <div class="badge badge-cyan">★ ACHIEVER</div>
+        </div>
+      </div>
+
+      <!-- Personal stats (from onboarding) -->
+      <div class="card" style="margin-bottom:16px" id="profilePersonalCard">
+        <span class="sec-label">✦ ABOUT YOU</span>
+        <div id="profilePersonalStats"></div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row" style="margin-bottom:16px">
+        <div class="stat-card">
+          <div class="stat-num">47</div>
+          <div class="stat-label">TOTAL TASKS</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">12</div>
+          <div class="stat-label">HABITS BUILT</div>
+        </div>
+      </div>
+      <div class="stats-row" style="margin-bottom:16px">
+        <div class="stat-card">
+          <div class="stat-num">7</div>
+          <div class="stat-label">DAY STREAK</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num">91%</div>
+          <div class="stat-label">COMPLETION</div>
+        </div>
+      </div>
+
+      <!-- Achievements -->
+      <div class="card" style="margin-bottom:16px">
+        <span class="sec-label">✦ ACHIEVEMENTS</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="card card-sm" style="text-align:center">
+            <div style="font-size:28px;margin-bottom:6px">🏆</div>
+            <div style="font-size:12px;font-weight:600">First Week</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">7-DAY STREAK</div>
+          </div>
+          <div class="card card-sm" style="text-align:center">
+            <div style="font-size:28px;margin-bottom:6px">⚡</div>
+            <div style="font-size:12px;font-weight:600">Speed Runner</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">10 TASKS/DAY</div>
+          </div>
+          <div class="card card-sm" style="text-align:center">
+            <div style="font-size:28px;margin-bottom:6px">🌙</div>
+            <div style="font-size:12px;font-weight:600">Night Owl</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">LATE PLANNER</div>
+          </div>
+          <div class="card card-sm" style="text-align:center;opacity:.4">
+            <div style="font-size:28px;margin-bottom:6px">👑</div>
+            <div style="font-size:12px;font-weight:600">Legend</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">30-DAY STREAK</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gap16"></div>
+    </div>
+  </div>
+
+  <!-- FAB -->
+  <button class="fab" id="fab" onclick="openAddModal()">+</button>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" data-screen="today" onclick="navigate('today')">
+      <div class="nav-icon">✦</div>
+      <div class="nav-label">TODAY</div>
+      <div class="nav-pip"></div>
+    </div>
+    <div class="nav-item" data-screen="schedule" onclick="navigate('schedule')">
+      <div class="nav-icon">◷</div>
+      <div class="nav-label">SCHEDULE</div>
+      <div class="nav-pip"></div>
+    </div>
+    <div class="nav-item" data-screen="habits" onclick="navigate('habits')">
+      <div class="nav-icon">◈</div>
+      <div class="nav-label">HABITS</div>
+      <div class="nav-pip"></div>
+    </div>
+    <div class="nav-item" data-screen="profile" onclick="navigate('profile')">
+      <div class="nav-icon">◉</div>
+      <div class="nav-label">ME</div>
+      <div class="nav-pip"></div>
+    </div>
+  </nav>
+</div>
+
+<!-- ADD TASK MODAL -->
+<div class="modal-overlay" id="addModal" onclick="closeModalOnBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add New ✦</div>
+    <div class="chips" id="addTypeTabs">
+      <div class="chip active" data-type="task" onclick="switchAddType('task',this)">Task</div>
+      <div class="chip" data-type="block" onclick="switchAddType('block',this)">Time Block</div>
+      <div class="chip" data-type="habit" onclick="switchAddType('habit',this)">Habit</div>
+    </div>
+
+    <!-- Task form -->
+    <div id="formTask">
+      <input class="input" id="taskInput" placeholder="What needs to get done?" type="text"/>
+      <select class="input" id="taskPriority">
+        <option value="high">🔴 High Priority</option>
+        <option value="med" selected>🟡 Medium Priority</option>
+        <option value="low">🟢 Low Priority</option>
+      </select>
+      <div class="field-label">Time (optional)</div>
+      <input class="input" id="taskTime" type="time" aria-label="Task time"/>
+      <select class="input" id="taskHabitLink" aria-label="Linked habit">
+        <option value="">Not linked to a habit</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin:-6px 0 12px;line-height:1.5;">
+        ✦ Link to a habit so completing this task also checks off that habit today
+      </div>
+      <button class="btn btn-primary btn-full" onclick="addTask()">Add Task ✦</button>
+    </div>
+
+    <!-- Block form -->
+    <div id="formBlock" style="display:none">
+      <input class="input" id="blockTitle" placeholder="What are you blocking time for?" type="text"/>
+      <div class="field-label">Start time</div>
+      <input class="input" id="blockStart" type="time" aria-label="Block start time"/>
+      <div class="field-label">End time</div>
+      <input class="input" id="blockEnd" type="time" aria-label="Block end time"/>
+      <select class="input" id="blockColor">
+        <option value="purple">💜 Focus / Deep Work</option>
+        <option value="pink">💗 Self Care</option>
+        <option value="cyan">💠 Study</option>
+        <option value="green">💚 Health</option>
+      </select>
+      <button class="btn btn-primary btn-full" onclick="addBlock()">Add Block ✦</button>
+    </div>
+
+    <!-- Habit form -->
+    <div id="formHabit" style="display:none">
+      <input class="input" id="habitName" placeholder="Habit name (e.g. Morning pages)" type="text"/>
+      <select class="input" id="habitIcon">
+        <option value="📖">📖 Reading</option>
+        <option value="🏃">🏃 Exercise</option>
+        <option value="💧">💧 Hydration</option>
+        <option value="🧘">🧘 Meditation</option>
+        <option value="✍️">✍️ Journaling</option>
+        <option value="🌙">🌙 Sleep Routine</option>
+        <option value="🎨">🎨 Creative</option>
+        <option value="⭐">⭐ Custom</option>
+      </select>
+      <select class="input" id="habitBlockLink">
+        <option value="">No reminder — just track it</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin:-6px 0 12px;line-height:1.5;">
+        ✦ Link to a schedule block to get a notification at that time
+      </div>
+      <button class="btn btn-primary btn-full" onclick="addHabit()">Add Habit ✦</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT HABIT MODAL -->
+<div class="modal-overlay" id="editHabitModal" onclick="closeEditModalOnBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Edit Habit ✦</div>
+
+    <input class="input" id="editHabitName" placeholder="Habit name" type="text" aria-label="Habit name"/>
+    <select class="input" id="editHabitIcon" aria-label="Habit icon">
+      <option value="📖">📖 Reading</option>
+      <option value="🏃">🏃 Exercise</option>
+      <option value="💧">💧 Hydration</option>
+      <option value="🧘">🧘 Meditation</option>
+      <option value="✍️">✍️ Journaling</option>
+      <option value="🌙">🌙 Sleep Routine</option>
+      <option value="🎨">🎨 Creative</option>
+      <option value="⭐">⭐ Custom</option>
+    </select>
+    <select class="input" id="editHabitBlockLink" aria-label="Linked schedule block">
+      <option value="">No reminder — just track it</option>
+    </select>
+    <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin:-6px 0 12px;line-height:1.5;">
+      ✦ Link to a schedule block to get a notification at that time
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="saveEditedHabit()">Save Changes ✦</button>
+    <div class="gap8"></div>
+    <button class="btn btn-ghost btn-full" id="removeReminderBtn" onclick="removeHabitReminder()" style="display:none;">🔕 Remove Reminder</button>
+    <div class="gap8"></div>
+    <button class="btn btn-ghost btn-full" onclick="deleteHabitFromEdit()" style="color:var(--neon-pink);">🗑 Delete Habit</button>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL (replaces native browser confirm(), which can be unreliable inside an installed PWA) -->
+<div class="modal-overlay" id="confirmModal" onclick="closeConfirmModalOnBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="confirmModalTitle">Are you sure?</div>
+    <div id="confirmModalMessage" style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:20px;"></div>
+    <button class="btn btn-primary btn-full" id="confirmModalConfirmBtn" style="background:linear-gradient(135deg, var(--neon-pink), var(--neon-purple));">Yes, Delete</button>
+    <div class="gap8"></div>
+    <button class="btn btn-ghost btn-full" onclick="closeConfirmModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+// ── DATA STATE ──
+const state = {
+  tasks: [
+    { id:1, text:'Finish vision board', time:'9:00 AM', sortKey:'09:00', priority:'high', done:false, date:null, habitId:null },
+    { id:2, text:'Read 10 pages of Atomic Habits', time:'11:00 AM', sortKey:'11:00', priority:'med', done:true, date:null, habitId:null },
+    { id:3, text:'Film TikTok for study routine', time:'2:00 PM', sortKey:'14:00', priority:'med', done:false, date:null, habitId:null },
+    { id:4, text:'Respond to DMs + emails', time:'4:00 PM', sortKey:'16:00', priority:'low', done:false, date:null, habitId:null },
+    { id:5, text:'Night skincare + journal', time:'9:30 PM', sortKey:'21:30', priority:'low', done:false, date:null, habitId:null },
+  ],
+  habits: [
+    { id:1, icon:'💧', name:'Drink 8 glasses', streak:12, days:[true,true,true,true,false,false,false], blockId:null, lastTaskGeneratedOn:null },
+    { id:2, icon:'🏃', name:'Move your body 30min', streak:5,  days:[true,true,false,true,false,false,false], blockId:4, lastTaskGeneratedOn:null },
+    { id:3, icon:'📖', name:'Read 10 pages', streak:7,  days:[true,true,true,true,true,false,false], blockId:null, lastTaskGeneratedOn:null },
+    { id:4, icon:'🧘', name:'Morning meditation', streak:3,  days:[false,true,false,true,false,false,false], blockId:1, lastTaskGeneratedOn:null },
+    { id:5, icon:'✍️', name:'Journal entry', streak:7,  days:[true,true,true,true,true,false,false], blockId:5, lastTaskGeneratedOn:null },
+  ],
+  blocks: [
+    { id:1, title:'Morning Routine', start:'7:00 AM', end:'8:30 AM', color:'pink', sortKey:'07:00' },
+    { id:2, title:'Deep Work — Study', start:'9:00 AM', end:'11:00 AM', color:'purple', sortKey:'09:00' },
+    { id:3, title:'Content Creation', start:'2:00 PM', end:'3:30 PM', color:'cyan', sortKey:'14:00' },
+    { id:4, title:'Workout', start:'5:00 PM', end:'6:00 PM', color:'green', sortKey:'17:00' },
+    { id:5, title:'Wind Down', start:'9:30 PM', end:'10:30 PM', color:'pink', sortKey:'21:30' },
+  ],
+  mood: null,
+  moodHistory: [], // [{ date: 'YYYY-MM-DD', mood: 'Happy' }, ...] — one entry per day, overwritten on re-check-in
+  notifsEnabled: false,
+  profile: null, // { name, age, heightCm, weightKg, goal } — set on first-run onboarding, null until then
+  currentScreen: 'today',
+  addType: 'task',
+  nextId: 100,
+};
+
+const quotes = [
+  ['She designed a life she loved — one day at a time.', '— PLANR DAILY'],
+  ['Your habits are your vote for the person you want to become.', '— JAMES CLEAR'],
+  ['Discipline is choosing between what you want now and what you want most.', '— UNKNOWN'],
+  ['Small steps every day > big leaps once in a while.', '— PLANR DAILY'],
+  ['Energy flows where intention goes. Protect yours.', '— PLANR DAILY'],
+];
+
+const moodMessages = {
+  'Thriving': '✦ You\'re in full bloom. Channel that energy into your top priorities!',
+  'Happy':    '✦ Good vibes detected. Ride this wave and get things done.',
+  'Meh':      '✦ Meh is okay. Pick one small task and just start.',
+  'Tired':    '✦ Rest is productive too. Maybe block some recovery time?',
+  'Stressed': '✦ Take a breath. Break your biggest task into one tiny step.',
+};
+
+const colorMap = {
+  purple: 'var(--neon-purple)', pink: 'var(--neon-pink)',
+  cyan: 'var(--neon-cyan)', green: 'var(--neon-green)',
+};
+
+// The 5 demo tasks above ship with date:null. Stamp them with "today" on first run so the
+// app looks correct no matter what date someone opens it on (this only runs once, since after
+// the first save, loadState() will restore real dates from localStorage instead of re-stamping).
+(function stampDemoTaskDates() {
+  const today = new Date().toISOString().slice(0, 10);
+  state.tasks.forEach(t => { if (!t.date) t.date = today; });
+})();
+
+// ── NAVIGATION ──
+function navigate(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + screen).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.screen === screen);
+  });
+  // show/hide FAB
+  document.getElementById('fab').style.display = screen === 'profile' ? 'none' : 'grid';
+  state.currentScreen = screen;
+}
+
+// ── RENDER TODAY ──
+function renderTasks() {
+  const list = document.getElementById('taskList');
+  const today = todayDateString();
+
+  const todaysTasks = state.tasks.filter(t => t.date === today);
+  const missedTasks = state.tasks.filter(t => t.date && t.date < today && !t.done);
+
+  const done = todaysTasks.filter(t => t.done).length;
+  const total = todaysTasks.length;
+  document.getElementById('tasksCompletedNum').textContent = done + '/' + total;
+  const pct = total ? Math.round(done / total * 100) : 0;
+  document.getElementById('taskProgress').style.width = pct + '%';
+
+  let html = '';
+
+  if (!todaysTasks.length && !missedTasks.length) {
+    list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No tasks yet. Hit + to add one ✦</div>';
+    return;
+  }
+
+  if (todaysTasks.length) {
+    html += todaysTasks.map(t => {
+      const habit = t.habitId ? state.habits.find(h => h.id === t.habitId) : null;
+      return `
+      <div class="task-item${t.done ? ' done' : ''}" onclick="toggleTask(${t.id})">
+        <div class="cb"><span class="cb-check">✓</span></div>
+        <div style="flex:1">
+          <div class="task-text">${t.text}${habit ? ' <span style="color:var(--neon-purple)">· ' + habit.icon + ' habit</span>' : ''}</div>
+          <div class="task-meta">${t.time || ''} ${t.priority === 'high' ? '· 🔴 HIGH' : t.priority === 'low' ? '· 🟢 LOW' : '· 🟡 MED'}</div>
+        </div>
+      </div>
+    `;
+    }).join('');
+  } else {
+    html += '<div style="text-align:center;padding:16px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No tasks for today yet ✦</div>';
+  }
+
+  if (missedTasks.length) {
+    html += `
+      <div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--border);">
+        <span class="sec-label" style="color:var(--neon-pink)">⚠ MISSED (${missedTasks.length})</span>
+        ${missedTasks.map(t => `
+          <div class="task-item" onclick="toggleTask(${t.id})" style="opacity:.7">
+            <div class="cb"><span class="cb-check">✓</span></div>
+            <div style="flex:1">
+              <div class="task-text">${t.text}</div>
+              <div class="task-meta">${t.date} · was due ${t.time || 'anytime'}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  list.innerHTML = html;
+}
+
+function toggleTask(id) {
+  const t = state.tasks.find(t => t.id === id);
+  if (!t) return;
+  t.done = !t.done;
+
+  // If this task is linked to a habit, keep the habit's day-dot in sync with it
+  // so the two never silently drift apart.
+  if (t.habitId) {
+    const habit = state.habits.find(h => h.id === t.habitId);
+    if (habit) {
+      const dayIndex = ((new Date().getDay() + 6) % 7); // Mon=0
+      habit.days[dayIndex] = t.done;
+      renderHabits();
+    }
+  }
+
+  renderTasks();
+  saveState();
+}
+
+// ── RENDER SCHEDULE ──
+function renderSchedule() {
+  // day chips
+  const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const today = new Date().getDay();
+  document.getElementById('dayChips').innerHTML = days.map((d,i) =>
+    `<div class="chip${i===today?' active':''}">${d}</div>`
+  ).join('');
+
+  // timeline
+  const tl = document.getElementById('timeline');
+  if (!state.blocks.length) {
+    tl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No blocks yet. Add one ✦</div>';
+    return;
+  }
+  tl.innerHTML = state.blocks.map((b, i) => {
+    const startMin = timeStringToMinutes(b.sortKey || b.start);
+    const endMin = timeStringToMinutes(b.end);
+    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+    // Handle blocks that cross midnight (e.g. 11:00 PM – 1:00 AM), where endMin < startMin.
+    const isActive = startMin !== null && endMin !== null && (
+      endMin > startMin
+        ? (nowMin >= startMin && nowMin < endMin)
+        : (nowMin >= startMin || nowMin < endMin)
+    );
+    const linkedHabits = isActive ? state.habits.filter(h => h.blockId === b.id) : [];
+    const isHabitActive = linkedHabits.length > 0;
+
+    const rowClass = isActive ? (isHabitActive ? ' timeline-row-active-habit' : ' timeline-row-active') : '';
+    const liveBadge = isActive
+      ? (isHabitActive
+          ? `<div class="badge badge-green tl-live-badge">🔥 NOW — ${linkedHabits.map(h => h.icon).join(' ')}</div>`
+          : `<div class="badge badge-cyan tl-live-badge">● IN PROGRESS</div>`)
+      : '';
+
+    return `
+    <div class="timeline-row${rowClass}">
+      <div class="tl-time">${b.start}</div>
+      <div class="tl-dot-col">
+        <div class="tl-dot" style="border-color:${colorMap[b.color]||'var(--neon-purple)'};"></div>
+        ${i < state.blocks.length-1 ? '<div class="tl-line"></div>' : ''}
+      </div>
+      <div class="tl-content">
+        <div class="tl-title">${b.title}</div>
+        <div class="tl-sub">${b.start} – ${b.end}</div>
+        ${liveBadge}
+      </div>
+      <div class="edit-target" onclick="deleteBlock(${b.id})" aria-label="Delete ${b.title}">🗑</div>
+    </div>`;
+  }).join('');
+}
+
+function deleteBlock(id) {
+  const block = state.blocks.find(b => b.id === id);
+  if (!block) return;
+
+  const linkedHabits = state.habits.filter(h => h.blockId === id);
+  const message = linkedHabits.length
+    ? `"${block.title}" is linked as a reminder for ${linkedHabits.map(h => h.name).join(', ')}. Deleting it will also remove that reminder.`
+    : `This will remove "${block.title}" from your schedule. This can't be undone.`;
+
+  showConfirm('Delete this block?', message, () => {
+    state.blocks = state.blocks.filter(b => b.id !== id);
+    // Clear the reminder link on any habit that pointed to this now-deleted block,
+    // so it doesn't silently reference a missing block (which the notification/auto-task
+    // generation logic already guards against, but this keeps the data itself clean).
+    linkedHabits.forEach(h => { h.blockId = null; h.notifiedOn = null; });
+
+    renderSchedule();
+    renderHabitBlockOptions(); // the deleted block must disappear from "link a reminder" dropdowns too
+    if (linkedHabits.length) renderHabits(); // refresh bell badges since a reminder link was removed
+    saveState();
+  });
+}
+
+// ── RENDER HABITS ──
+// Returns {hasTasks, done, total, ratio} for a given habit on a given date (YYYY-MM-DD),
+// by counting that habit's linked tasks for that date. hasTasks=false means no task was ever
+// generated/added for this habit that day, so the caller should fall back to the manual
+// day-dot flag instead of treating it as a task-driven status.
+function getHabitDayStats(habitId, dateStr) {
+  const dayTasks = state.tasks.filter(t => t.habitId === habitId && t.date === dateStr);
+  if (!dayTasks.length) return { hasTasks: false, done: 0, total: 0, ratio: 0 };
+  const done = dayTasks.filter(t => t.done).length;
+  return { hasTasks: true, done, total: dayTasks.length, ratio: done / dayTasks.length };
+}
+
+// Whether a habit has ANY task linked to it, ever (used to decide if it's "task-driven" at all,
+// so a habit that's simply never been linked to a task doesn't get incorrectly marked Missed).
+function habitHasAnyTasks(habitId) {
+  return state.tasks.some(t => t.habitId === habitId);
+}
+
+function renderHabits() {
+  const wDayLabels = ['M','T','W','T','F','S','S'];
+  const todayIdx = ((new Date().getDay() + 6) % 7); // Mon=0
+  const todayStr = todayDateString();
+  let totalChecks = 0, maxChecks = 0;
+
+  document.getElementById('habitList').innerHTML = state.habits.map(h => {
+    const linkedBlock = h.blockId ? state.blocks.find(b => b.id === h.blockId) : null;
+    const isTaskDriven = habitHasAnyTasks(h.id);
+    const todayStats = getHabitDayStats(h.id, todayStr);
+
+    // Determine today's status + progress percentage
+    let statusLabel, statusClass, progressPct;
+    if (isTaskDriven) {
+      if (!todayStats.hasTasks) {
+        statusLabel = '⚠ MISSED'; statusClass = 'badge-pink'; progressPct = 0;
+      } else if (todayStats.done === todayStats.total) {
+        statusLabel = '✓ DONE'; statusClass = 'badge-green'; progressPct = 100;
+      } else {
+        statusLabel = `PENDING ${todayStats.done}/${todayStats.total}`; statusClass = 'badge-purple'; progressPct = Math.round(todayStats.ratio * 100);
+      }
+    } else {
+      // Pure manual habit, no tasks ever linked — fall back to the day-dot flag entirely
+      const doneToday = h.days[todayIdx] || false;
+      statusLabel = doneToday ? '✓ DONE' : 'PENDING';
+      statusClass = doneToday ? 'badge-green' : 'badge-purple';
+      progressPct = doneToday ? 100 : 0;
+    }
+
+    // Weekly mini progress bars (Mon-Sun): each day uses task stats if that habit had tasks
+    // that day, otherwise falls back to the manual flag for that day.
+    const weekBarsHtml = wDayLabels.map((label, i) => {
+      let dayPct;
+      if (i > todayIdx) {
+        dayPct = null; // future day, not yet happened
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() - (todayIdx - i));
+        const dStr = d.toISOString().slice(0, 10);
+        const stats = getHabitDayStats(h.id, dStr);
+        dayPct = stats.hasTasks ? Math.round(stats.ratio * 100) : (h.days[i] ? 100 : 0);
+      }
+      const barColor = dayPct === null ? 'var(--border)' : (dayPct === 100 ? 'var(--neon-green)' : dayPct > 0 ? 'var(--neon-purple)' : 'var(--neon-pink)');
+      const barHeight = dayPct === null ? '4px' : Math.max(4, Math.round((dayPct/100) * 18)) + 'px';
+      return `
+        <div class="week-bar-target${dayPct === null ? ' week-bar-future' : ''}" onclick="${dayPct === null ? '' : `toggleHabitDay(${h.id},${i})`}" aria-label="${label} ${dayPct ?? 'upcoming'}%">
+          <div class="week-bar-track">
+            <div class="week-bar-fill" style="height:${barHeight}; background:${barColor};"></div>
+          </div>
+          <div class="week-bar-label">${label}</div>
+        </div>`;
+    }).join('');
+
+    if (isTaskDriven && todayStats.hasTasks) {
+      totalChecks += todayStats.done; maxChecks += todayStats.total;
+    } else if (!isTaskDriven) {
+      totalChecks += (h.days[todayIdx] ? 1 : 0); maxChecks += 1;
+    }
+
+    return `
+    <div class="habit-row habit-row-v2">
+      <div class="habit-row-top">
+        <div class="habit-left">
+          <div class="habit-icon">${h.icon}</div>
+          <div>
+            <div class="habit-name">${h.name}</div>
+            <div class="habit-streak">🔥 ${h.streak} day streak${linkedBlock ? ` · 🔔 ${linkedBlock.start}` : ''}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <div class="badge ${statusClass}">${statusLabel}</div>
+          <div class="edit-target" onclick="openEditHabitModal(${h.id})" aria-label="Edit ${h.name}">✎</div>
+        </div>
+      </div>
+      <div class="habit-progress-row">
+        <div class="prog-wrap habit-prog-wrap">
+          <div class="prog-fill ${progressPct === 100 ? 'prog-cyan' : 'prog-purple'}" style="width:${progressPct}%"></div>
+        </div>
+      </div>
+      <div class="week-bars-row">${weekBarsHtml}</div>
+    </div>`;
+  }).join('');
+
+  const pct = maxChecks ? Math.round(totalChecks / maxChecks * 100) : 0;
+  document.getElementById('weekProgress').style.width = pct + '%';
+  document.getElementById('weekPercent').textContent = pct + '% done';
+  renderTaskHabitOptions(); // keep the Add Task "link to habit" dropdown in sync with the habit list
+}
+
+// Populates the "link to schedule block" dropdown in the Add Habit form with current blocks
+function renderHabitBlockOptions() {
+  const optionsHtml = '<option value="">No reminder — just track it</option>' +
+    state.blocks.map(b => `<option value="${b.id}">🔔 ${b.start} — ${b.title}</option>`).join('');
+
+  ['habitBlockLink', 'editHabitBlockLink'].forEach(id => {
+    const sel = document.getElementById(id);
+    const current = sel.value;
+    sel.innerHTML = optionsHtml;
+    // preserve selection if the block still exists (e.g. after adding a new block mid-form)
+    if (current && sel.querySelector(`option[value="${current}"]`)) sel.value = current;
+  });
+}
+
+// Populates the "link this task to a habit" dropdown in the Add Task form
+function renderTaskHabitOptions() {
+  const sel = document.getElementById('taskHabitLink');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Not linked to a habit</option>' +
+    state.habits.map(h => `<option value="${h.id}">${h.icon} ${h.name}</option>`).join('');
+  if (current && sel.querySelector(`option[value="${current}"]`)) sel.value = current;
+}
+
+// Manual day toggle — only meaningful for "pure manual" habits with no linked tasks at all.
+// For task-driven habits, completion comes from checking off tasks instead, so this intentionally
+// does nothing if the habit has ever had a task — the week-bar click for those habits would
+// otherwise silently flip a flag that has no visible effect, which would be confusing.
+function toggleHabitDay(id, dayIndex) {
+  const h = state.habits.find(h => h.id === id);
+  if (!h) return;
+  if (habitHasAnyTasks(h.id)) return; // task-driven habits are completed via their tasks, not manually
+  h.days[dayIndex] = !h.days[dayIndex];
+  renderHabits();
+  saveState();
+}
+
+// ── EDIT HABIT MODAL ──
+let editingHabitId = null;
+
+function openEditHabitModal(id) {
+  const h = state.habits.find(h => h.id === id);
+  if (!h) return;
+  editingHabitId = id;
+
+  document.getElementById('editHabitName').value = h.name;
+  document.getElementById('editHabitIcon').value = h.icon;
+  renderHabitBlockOptions(); // make sure dropdown is fresh before setting its value
+  document.getElementById('editHabitBlockLink').value = h.blockId ? String(h.blockId) : '';
+
+  document.getElementById('removeReminderBtn').style.display = h.blockId ? 'block' : 'none';
+
+  document.getElementById('editHabitModal').classList.add('open');
+}
+
+function closeEditHabitModal() {
+  document.getElementById('editHabitModal').classList.remove('open');
+  editingHabitId = null;
+}
+
+function closeEditModalOnBg(e) {
+  if (e.target === document.getElementById('editHabitModal')) closeEditHabitModal();
+}
+
+// ── CONFIRM MODAL ──
+// Replaces native window.confirm(), which can fail to render or behave unreliably inside
+// an installed PWA's standalone window on some Android/Chrome versions — making destructive
+// buttons (like delete) appear to silently do nothing when tapped.
+function showConfirm(title, message, onConfirm) {
+  document.getElementById('confirmModalTitle').textContent = title;
+  document.getElementById('confirmModalMessage').textContent = message;
+
+  const btn = document.getElementById('confirmModalConfirmBtn');
+  // Replace the button outright (rather than re-adding a listener) so we never stack up
+  // multiple confirm handlers from previous calls to showConfirm().
+  const freshBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(freshBtn, btn);
+  freshBtn.addEventListener('click', () => {
+    closeConfirmModal();
+    onConfirm();
+  });
+
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirmModal').classList.remove('open');
+}
+
+function closeConfirmModalOnBg(e) {
+  if (e.target === document.getElementById('confirmModal')) closeConfirmModal();
+}
+
+function saveEditedHabit() {
+  const h = state.habits.find(h => h.id === editingHabitId);
+  if (!h) return;
+  const name = document.getElementById('editHabitName').value.trim();
+  if (!name) return; // don't allow saving an empty name
+  const icon = document.getElementById('editHabitIcon').value;
+  const blockIdRaw = document.getElementById('editHabitBlockLink').value;
+  const newBlockId = blockIdRaw ? parseInt(blockIdRaw, 10) : null;
+
+  h.name = name;
+  h.icon = icon;
+  // If the reminder link changed, reset notifiedOn so a newly-linked reminder
+  // can fire today instead of waiting until "tomorrow" due to a stale flag.
+  if (h.blockId !== newBlockId) h.notifiedOn = null;
+  h.blockId = newBlockId;
+
+  renderHabits();
+  saveState();
+  closeEditHabitModal();
+}
+
+function removeHabitReminder() {
+  const h = state.habits.find(h => h.id === editingHabitId);
+  if (!h) return;
+  h.blockId = null;
+  h.notifiedOn = null;
+  document.getElementById('editHabitBlockLink').value = '';
+  document.getElementById('removeReminderBtn').style.display = 'none';
+  renderHabits();
+  saveState();
+}
+
+function deleteHabitFromEdit() {
+  const habitId = editingHabitId; // capture before closeEditHabitModal() clears it
+  const habit = state.habits.find(h => h.id === habitId);
+  if (!habit) return;
+
+  closeEditHabitModal(); // close the edit sheet first so only one modal is ever visible at a time
+  showConfirm('Delete this habit?', `"${habit.name}" and its streak history will be permanently removed.`, () => {
+    state.habits = state.habits.filter(h => h.id !== habitId);
+    renderHabits();
+    saveState();
+  });
+}
+
+// ── MOOD ──
+function selectMood(el) {
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  state.mood = el.dataset.mood;
+  const msg = document.getElementById('moodMsg');
+  msg.style.display = 'block';
+  msg.textContent = moodMessages[state.mood] || '';
+
+  // Upsert today's entry in the history (one entry per day — re-checking in just updates it,
+  // rather than stacking duplicate entries for the same date).
+  const today = todayDateString();
+  const existing = state.moodHistory.find(m => m.date === today);
+  if (existing) existing.mood = state.mood;
+  else state.moodHistory.push({ date: today, mood: state.mood });
+
+  saveState();
+  if (hasCompletedOnboarding()) renderProfile(); // keep the "most common mood" badge fresh if Profile is visible
+}
+
+// ── MODAL ──
+function openAddModal() { document.getElementById('addModal').classList.add('open'); }
+function closeAddModal() { document.getElementById('addModal').classList.remove('open'); }
+function closeModalOnBg(e) { if (e.target === document.getElementById('addModal')) closeAddModal(); }
+
+function switchAddType(type, el) {
+  document.querySelectorAll('#addTypeTabs .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  ['formTask','formBlock','formHabit'].forEach(id => document.getElementById(id).style.display='none');
+  document.getElementById('form' + type.charAt(0).toUpperCase() + type.slice(1)).style.display = 'block';
+  state.addType = type;
+}
+
+// Converts a 24h "HH:MM" value from <input type="time"> into "h:MM AM/PM" for display,
+// while returning the raw 24h string too so we can sort chronologically.
+function formatTime24to12(value) {
+  if (!value) return null;
+  const [hStr, mStr] = value.split(':');
+  let h = parseInt(hStr, 10);
+  const period = h >= 12 ? 'PM' : 'AM';
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return { display: `${h12}:${mStr} ${period}`, sortKey: value };
+}
+
+function addTask() {
+  const text = document.getElementById('taskInput').value.trim();
+  const priority = document.getElementById('taskPriority').value;
+  const rawTime = document.getElementById('taskTime').value;
+  const formatted = formatTime24to12(rawTime);
+  const time = formatted ? formatted.display : 'Anytime';
+  const sortKey = formatted ? formatted.sortKey : '99:99'; // "Anytime" tasks sort last
+  const habitIdRaw = document.getElementById('taskHabitLink').value;
+  const habitId = habitIdRaw ? parseInt(habitIdRaw, 10) : null;
+  if (!text) return;
+  state.tasks.push({
+    id: state.nextId++, text, time, sortKey, priority, done: false,
+    date: todayDateString(), habitId,
+  });
+  state.tasks.sort((a, b) => (a.sortKey || '99:99').localeCompare(b.sortKey || '99:99'));
+  document.getElementById('taskInput').value = '';
+  document.getElementById('taskTime').value = '';
+  document.getElementById('taskHabitLink').value = '';
+  renderTasks();
+  saveState();
+  closeAddModal();
+  navigate('today');
+}
+
+function addBlock() {
+  const title = document.getElementById('blockTitle').value.trim();
+  const rawStart = document.getElementById('blockStart').value;
+  const rawEnd   = document.getElementById('blockEnd').value;
+  const startF = formatTime24to12(rawStart);
+  const endF   = formatTime24to12(rawEnd);
+  const start = startF ? startF.display : '12:00 PM';
+  const end   = endF   ? endF.display   : '1:00 PM';
+  const sortKey = startF ? startF.sortKey : rawStart || '12:00';
+  const color = document.getElementById('blockColor').value;
+  if (!title) return;
+  state.blocks.push({ id: state.nextId++, title, start, end, color, sortKey });
+  state.blocks.sort((a, b) => (a.sortKey || '').localeCompare(b.sortKey || ''));
+  document.getElementById('blockTitle').value = '';
+  document.getElementById('blockStart').value = '';
+  document.getElementById('blockEnd').value = '';
+  renderSchedule();
+  renderHabitBlockOptions(); // refresh the habit-link dropdown with the new block
+  saveState();
+  closeAddModal();
+  navigate('schedule');
+}
+
+function addHabit() {
+  const name = document.getElementById('habitName').value.trim();
+  const icon = document.getElementById('habitIcon').value;
+  const blockIdRaw = document.getElementById('habitBlockLink').value;
+  const blockId = blockIdRaw ? parseInt(blockIdRaw, 10) : null;
+  if (!name) return;
+  state.habits.push({ id: state.nextId++, icon, name, streak:0, days:[false,false,false,false,false,false,false], blockId, notifiedOn: null });
+  document.getElementById('habitName').value = '';
+  document.getElementById('habitBlockLink').value = '';
+  renderHabits();
+  saveState();
+  closeAddModal();
+  navigate('habits');
+}
+
+// ── DATE / QUOTE ──
+function initDate() {
+  const now = new Date();
+  const opts = { weekday:'long', month:'long', day:'numeric' };
+  document.getElementById('todayDate').textContent = now.toLocaleDateString('en-US', opts).toUpperCase();
+  const q = quotes[now.getDay() % quotes.length];
+  document.getElementById('quoteText').textContent = q[0];
+  document.getElementById('quoteAuthor').textContent = q[1];
+}
+
+// ── PWA INSTALL ──
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  setTimeout(() => document.getElementById('installBanner').classList.add('show'), 2000);
+});
+document.getElementById('installBtn').addEventListener('click', async () => {
+  if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
+  document.getElementById('installBanner').classList.remove('show');
+});
+document.getElementById('closeBanner').addEventListener('click', () => {
+  document.getElementById('installBanner').classList.remove('show');
+});
+
+// ── FIRST-RUN ONBOARDING ──
+let onboardingStep = 1;
+const ONBOARDING_TOTAL_STEPS = 7;
+let selectedGoal = null;
+
+// Curated habits offered during onboarding, each with a sensible *default* time — not adaptive
+// AI scheduling, just reasonable starting points the person can freely edit in step 7 or later.
+const CURATED_HABITS = [
+  { id: 'hydration',  icon: '💧', name: 'Drink 8 glasses',     defaultTime: '08:00' },
+  { id: 'exercise',   icon: '🏃', name: 'Move your body 30min', defaultTime: '17:00' },
+  { id: 'reading',    icon: '📖', name: 'Read 10 pages',        defaultTime: '21:00' },
+  { id: 'meditation', icon: '🧘', name: 'Morning meditation',   defaultTime: '07:00' },
+  { id: 'sleep',      icon: '🌙', name: 'Wind down for sleep',  defaultTime: '22:00' },
+  { id: 'journaling', icon: '✍️', name: 'Journal entry',        defaultTime: '21:30' },
+];
+const CUSTOM_HABIT_DEFAULT_TIME = '18:00'; // generic fallback for anything the person types in themselves
+
+let selectedCuratedHabitIds = []; // subset of CURATED_HABITS ids
+let customOnboardingHabits = [];  // [{ name }] — times for these live in onboardingHabitTimes too
+let onboardingHabitTimes = {};    // key -> 'HH:MM', key is curated id or `custom:<index>`
+
+function renderOnboardingHabitGrid() {
+  document.getElementById('obHabitGrid').innerHTML = CURATED_HABITS.map(h => `
+    <div class="onboarding-habit-btn${selectedCuratedHabitIds.includes(h.id) ? ' selected' : ''}"
+         onclick="toggleCuratedHabit('${h.id}')" role="button" tabindex="0" aria-label="${h.name}">
+      <div class="onboarding-habit-icon">${h.icon}</div>
+      <div>${h.name}</div>
+    </div>
+  `).join('');
+  if (typeof enhanceClickableDivs === 'function') enhanceClickableDivs(document.getElementById('obHabitGrid'));
+}
+
+function toggleCuratedHabit(id) {
+  const idx = selectedCuratedHabitIds.indexOf(id);
+  if (idx === -1) {
+    selectedCuratedHabitIds.push(id);
+    const habit = CURATED_HABITS.find(h => h.id === id);
+    onboardingHabitTimes[id] = habit.defaultTime;
+  } else {
+    selectedCuratedHabitIds.splice(idx, 1);
+    delete onboardingHabitTimes[id];
+  }
+  renderOnboardingHabitGrid();
+  document.getElementById('obError').textContent = '';
+}
+
+function addCustomOnboardingHabit() {
+  const input = document.getElementById('obCustomHabitInput');
+  const name = input.value.trim();
+  if (!name) return;
+  const key = `custom:${customOnboardingHabits.length}`;
+  customOnboardingHabits.push({ name, key });
+  onboardingHabitTimes[key] = CUSTOM_HABIT_DEFAULT_TIME;
+  input.value = '';
+  renderCustomOnboardingHabitList();
+  document.getElementById('obError').textContent = '';
+}
+
+function removeCustomOnboardingHabit(key) {
+  customOnboardingHabits = customOnboardingHabits.filter(h => h.key !== key);
+  delete onboardingHabitTimes[key];
+  renderCustomOnboardingHabitList();
+}
+
+function renderCustomOnboardingHabitList() {
+  document.getElementById('obCustomHabitList').innerHTML = customOnboardingHabits.map(h => `
+    <div class="onboarding-custom-habit-chip">
+      <span>${h.name}</span>
+      <span class="onboarding-custom-habit-remove" role="button" tabindex="0" aria-label="Remove ${h.name}" onclick="removeCustomOnboardingHabit('${h.key}')"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();removeCustomOnboardingHabit('${h.key}')}">✕</span>
+    </div>
+  `).join('');
+}
+
+function getAllSelectedOnboardingHabits() {
+  const curated = selectedCuratedHabitIds.map(id => {
+    const h = CURATED_HABITS.find(c => c.id === id);
+    return { key: id, icon: h.icon, name: h.name };
+  });
+  const custom = customOnboardingHabits.map(h => ({ key: h.key, icon: '⭐', name: h.name }));
+  return [...curated, ...custom];
+}
+
+function renderOnboardingTimeReview() {
+  const all = getAllSelectedOnboardingHabits();
+  const list = document.getElementById('obTimeReviewList');
+  if (!all.length) {
+    list.innerHTML = '<div class="onboarding-no-habits-msg">No habits selected — that\'s okay, you can add some anytime from the Habits tab.</div>';
+    return;
+  }
+  list.innerHTML = all.map(h => `
+    <div class="onboarding-time-review-row">
+      <div class="onboarding-time-review-label"><span>${h.icon}</span><span>${h.name}</span></div>
+      <input type="time" value="${onboardingHabitTimes[h.key] || CUSTOM_HABIT_DEFAULT_TIME}"
+             onchange="onboardingHabitTimes['${h.key}'] = this.value" aria-label="Reminder time for ${h.name}"/>
+    </div>
+  `).join('');
+}
+
+function showOnboardingStep(step) {
+  document.querySelectorAll('.onboarding-step').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step, 10) === step);
+  });
+  document.querySelectorAll('.onboarding-dot').forEach(el => {
+    const s = parseInt(el.dataset.step, 10);
+    el.classList.toggle('active', s === step);
+    el.classList.toggle('complete', s < step);
+  });
+  document.getElementById('obBackBtn').style.visibility = step === 1 ? 'hidden' : 'visible';
+  document.getElementById('obNextBtn').textContent = step === ONBOARDING_TOTAL_STEPS ? 'Finish ✦' : 'Next ✦';
+  document.getElementById('obError').textContent = '';
+
+  if (step === 6) renderOnboardingHabitGrid();
+  if (step === 7) renderOnboardingTimeReview();
+}
+
+function onboardingValidateStep(step) {
+  if (step === 1) {
+    const name = document.getElementById('obName').value.trim();
+    if (!name) return 'Please enter your name';
+  } else if (step === 2) {
+    const age = parseInt(document.getElementById('obAge').value, 10);
+    if (!age || age < 1 || age > 120) return 'Please enter a valid age';
+  } else if (step === 3) {
+    const height = parseFloat(document.getElementById('obHeight').value);
+    if (!height || height < 50 || height > 250) return 'Please enter a valid height in cm';
+  } else if (step === 4) {
+    const weight = parseFloat(document.getElementById('obWeight').value);
+    if (!weight || weight < 10 || weight > 400) return 'Please enter a valid weight in kg';
+  } else if (step === 5) {
+    if (!selectedGoal) return 'Please pick a goal';
+  }
+  // Steps 6 and 7 are intentionally optional — a person with zero habits in mind yet should
+  // still be able to finish setup and add habits later from the Habits tab.
+  return null; // valid
+}
+
+function selectGoal(el) {
+  document.querySelectorAll('.onboarding-goal-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedGoal = el.dataset.goal;
+  document.getElementById('obError').textContent = '';
+}
+
+function onboardingNext() {
+  const error = onboardingValidateStep(onboardingStep);
+  if (error) {
+    document.getElementById('obError').textContent = error;
+    return;
+  }
+  if (onboardingStep < ONBOARDING_TOTAL_STEPS) {
+    onboardingStep++;
+    showOnboardingStep(onboardingStep);
+  } else {
+    finishOnboarding();
+  }
+}
+
+function onboardingBack() {
+  if (onboardingStep > 1) {
+    onboardingStep--;
+    showOnboardingStep(onboardingStep);
+  }
+}
+
+// BMI is shown only as a neutral, informational data point on the Profile screen — never paired
+// with diet/weight-loss suggestions or framed around appearance, especially given the app's
+// youth-oriented audience. The category label intentionally uses plain clinical language.
+function calculateBMI(heightCm, weightKg) {
+  const heightM = heightCm / 100;
+  const bmi = weightKg / (heightM * heightM);
+  let category;
+  if (bmi < 18.5) category = 'Below typical range';
+  else if (bmi < 25) category = 'Typical range';
+  else if (bmi < 30) category = 'Above typical range';
+  else category = 'Well above typical range';
+  return { value: Math.round(bmi * 10) / 10, category };
+}
+
+// Converts a 24h "HH:MM" onboarding time value into the same {display, sortKey} shape used
+// elsewhere in the app (formatTime24to12), so generated blocks are consistent with manually
+// created ones.
+function onboardingTimeToBlockFields(time24) {
+  const formatted = formatTime24to12(time24);
+  return formatted || { display: '6:00 PM', sortKey: '18:00' };
+}
+
+function finishOnboarding() {
+  const name = document.getElementById('obName').value.trim();
+  const age = parseInt(document.getElementById('obAge').value, 10);
+  const heightCm = parseFloat(document.getElementById('obHeight').value);
+  const weightKg = parseFloat(document.getElementById('obWeight').value);
+
+  state.profile = { name, age, heightCm, weightKg, goal: selectedGoal };
+
+  // For every habit chosen in onboarding, create a matching schedule block at the (possibly
+  // edited) reminder time, then create the habit linked to that block — reusing the exact same
+  // block + habit + reminder system used everywhere else in the app, just pre-filled here.
+  const allHabits = getAllSelectedOnboardingHabits();
+  allHabits.forEach(h => {
+    const time24 = onboardingHabitTimes[h.key] || CUSTOM_HABIT_DEFAULT_TIME;
+    const { display, sortKey } = onboardingTimeToBlockFields(time24);
+
+    const blockId = state.nextId++;
+    state.blocks.push({
+      id: blockId, title: h.name, start: display, end: display, color: 'purple', sortKey,
+    });
+
+    state.habits.push({
+      id: state.nextId++, icon: h.icon, name: h.name, streak: 0,
+      days: [false, false, false, false, false, false, false],
+      blockId, lastTaskGeneratedOn: null, notifiedOn: null,
+    });
+  });
+  if (allHabits.length) {
+    state.blocks.sort((a, b) => (a.sortKey || '').localeCompare(b.sortKey || ''));
+  }
+
+  saveState();
+  document.getElementById('onboardingOverlay').classList.add('hidden');
+  document.getElementById('app').removeAttribute('aria-hidden');
+  document.getElementById('app').removeAttribute('inert');
+  renderProfile();
+
+  // Immediately reflect the newly created habits/blocks/tasks across the app, since the person
+  // lands on the Today screen right after onboarding and should see today's tasks already there.
+  generateDailyHabitTasks();
+  renderTasks();
+  renderSchedule();
+  renderHabits();
+  renderHabitBlockOptions();
+}
+
+function hasCompletedOnboarding() {
+  return state.profile !== null && state.profile !== undefined;
+}
+
+const GOAL_INFO = {
+  habits:  { label: 'Building Habits', icon: '🔥' },
+  focus:   { label: 'Staying Focused',  icon: '🎯' },
+  fitness: { label: 'Getting Fit',      icon: '💪' },
+  balance: { label: 'Finding Balance',  icon: '🌙' },
+};
+
+const MOOD_EMOJI = {
+  Thriving: '😤', Happy: '😊', Meh: '😐', Tired: '😴', Stressed: '😰',
+};
+
+// Returns the most frequent mood logged in the last 7 days (today inclusive), or null if there's
+// no mood history yet. Ties are broken by whichever mood was logged most recently, so the badge
+// reflects current feeling rather than an arbitrary alphabetical pick.
+function getMostCommonMoodThisWeek() {
+  if (!state.moodHistory.length) return null;
+
+  const today = new Date();
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6); // 7-day window, today inclusive
+  const cutoff = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const recent = state.moodHistory.filter(m => m.date >= cutoff);
+  if (!recent.length) return null;
+
+  const counts = {};
+  recent.forEach(m => { counts[m.mood] = (counts[m.mood] || 0) + 1; });
+
+  let best = null, bestCount = 0, bestDate = '';
+  recent.forEach(m => {
+    const c = counts[m.mood];
+    if (c > bestCount || (c === bestCount && m.date > bestDate)) {
+      best = m.mood; bestCount = c; bestDate = m.date;
+    }
+  });
+  return { mood: best, count: bestCount, daysTracked: recent.length };
+}
+
+function renderProfile() {
+  if (!hasCompletedOnboarding()) return; // leave the default placeholder markup until onboarding completes
+
+  const p = state.profile;
+  const initial = (p.name || 'Y').trim().charAt(0).toUpperCase() || 'Y';
+  document.getElementById('profileAvatar').textContent = initial;
+  document.getElementById('profileName').textContent = p.name || 'Youth Planner';
+
+  const goalInfo = GOAL_INFO[p.goal] || null;
+  document.getElementById('profileMeta').textContent = `Age ${p.age} ✦ ${goalInfo ? goalInfo.label : 'PLANR member'}`;
+
+  if (goalInfo) {
+    document.getElementById('profileGoalBadge').innerHTML = `<div class="badge badge-purple">${goalInfo.icon} ${goalInfo.label.toUpperCase()}</div>`;
+  }
+
+  // Mood badge: shown as a neutral, low-key data point (same styling as any other badge) —
+  // never singled out or styled as a warning, even for moods like "Stressed" or "Tired".
+  const moodStat = getMostCommonMoodThisWeek();
+  if (moodStat) {
+    const emoji = MOOD_EMOJI[moodStat.mood] || '✦';
+    const badgeHtml = `<div class="badge badge-cyan">${emoji} MOSTLY ${moodStat.mood.toUpperCase()} THIS WEEK</div>`;
+    document.getElementById('profileGoalBadge').insertAdjacentHTML('beforeend', badgeHtml);
+  }
+
+  const personalStats = document.getElementById('profilePersonalStats');
+  if (p.heightCm && p.weightKg) {
+    const bmi = calculateBMI(p.heightCm, p.weightKg);
+    personalStats.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="card card-sm" style="text-align:center">
+          <div style="font-size:18px;font-weight:700">${p.heightCm} cm</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">HEIGHT</div>
+        </div>
+        <div class="card card-sm" style="text-align:center">
+          <div style="font-size:18px;font-weight:700">${p.weightKg} kg</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">WEIGHT</div>
+        </div>
+      </div>
+      <div class="card card-sm" style="text-align:center">
+        <div style="font-size:18px;font-weight:700">${bmi.value}</div>
+        <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">BMI · ${bmi.category.toUpperCase()}</div>
+      </div>
+    `;
+  }
+}
+
+
+const STORAGE_KEY = 'planr_state_v1';
+
+function saveState() {
+  try {
+    const toSave = {
+      tasks: state.tasks, habits: state.habits, blocks: state.blocks,
+      mood: state.mood, moodHistory: state.moodHistory, nextId: state.nextId,
+      notifsEnabled: state.notifsEnabled, profile: state.profile,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch (e) {
+    // Storage can fail in private/incognito mode or if quota is exceeded — fail silently,
+    // the app still works fully in-memory for the current session.
+    console.warn('PLANR: could not save data locally', e);
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (saved.tasks)  state.tasks  = saved.tasks;
+    if (saved.habits) state.habits = saved.habits;
+    if (saved.blocks) state.blocks = saved.blocks;
+    if (saved.nextId) state.nextId = saved.nextId;
+    if (saved.mood)   state.mood   = saved.mood;
+    if (Array.isArray(saved.moodHistory)) state.moodHistory = saved.moodHistory;
+    if (typeof saved.notifsEnabled === 'boolean') state.notifsEnabled = saved.notifsEnabled;
+    if (saved.profile) state.profile = saved.profile;
+    return true;
+  } catch (e) {
+    console.warn('PLANR: could not load saved data, starting fresh', e);
+    return false;
+  }
+}
+
+// ── HABIT NOTIFICATIONS ──
+// Fires a browser notification when a linked habit's scheduled block start time arrives.
+// LIMITATION: this only works while the app/tab is open (foreground or backgrounded),
+// since it relies on a JS interval timer, not a backend push service. Fully closing the
+// app or browser stops it — there is no "while closed" delivery in this version.
+
+function todayDateString() {
+  return new Date().toISOString().slice(0, 10); // "2026-06-18", used to dedupe notifications per day
+}
+
+// Converts "9:00 AM" / "9:30 PM" style display strings (or "HH:MM" sortKeys) into minutes-since-midnight
+function timeStringToMinutes(str) {
+  if (!str) return null;
+  // 24h "HH:MM" format (sortKey)
+  if (/^\d{1,2}:\d{2}$/.test(str) && !/[AP]M/i.test(str)) {
+    const [h, m] = str.split(':').map(Number);
+    return h * 60 + m;
+  }
+  // "9:00 AM" / "9:30 PM" format
+  const match = str.match(/(\d{1,2}):(\d{2})\s*([AP])M/i);
+  if (!match) return null;
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const isPM = match[3].toUpperCase() === 'P';
+  if (isPM && h !== 12) h += 12;
+  if (!isPM && h === 12) h = 0;
+  return h * 60 + m;
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) {
+    alert('Notifications are not supported in this browser.');
+    return false;
+  }
+  if (Notification.permission === 'granted') return true;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+function fireHabitNotification(habit, block) {
+  if (Notification.permission !== 'granted') return;
+  try {
+    new Notification(`⏰ Time for: ${habit.name}`, {
+      body: `${block.title} starts now (${block.start}) ✦ PLANR`,
+      icon: undefined, // PWA icon set will be picked up automatically once hosted with manifest icons
+      tag: `habit-${habit.id}-${todayDateString()}`, // prevents duplicate stacked notifications
+    });
+  } catch (e) {
+    console.warn('PLANR: notification failed to fire', e);
+  }
+}
+
+// ── AUTO-GENERATE DAILY TASKS FOR REMINDER-LINKED HABITS ──
+// For every habit that has a schedule block linked (i.e. has a reminder set), automatically
+// create today's task for it once per day, so the habit shows up as something concrete to do
+// and check off — rather than only living as an abstract streak dot.
+function generateDailyHabitTasks() {
+  const today = todayDateString();
+  let changed = false;
+
+  state.habits.forEach(h => {
+    if (!h.blockId) return; // only auto-generate for habits with a linked reminder
+    if (h.lastTaskGeneratedOn === today) return; // already generated today, don't duplicate
+
+    const block = state.blocks.find(b => b.id === h.blockId);
+    if (!block) return; // linked block was deleted/missing — nothing to schedule against
+
+    // Guard against duplicates even if lastTaskGeneratedOn somehow got out of sync
+    // (e.g. data edited externally, or a future code path also adds a task for this habit today).
+    const alreadyExists = state.tasks.some(t => t.habitId === h.id && t.date === today);
+    if (alreadyExists) { h.lastTaskGeneratedOn = today; changed = true; return; }
+
+    state.tasks.push({
+      id: state.nextId++,
+      text: h.name,
+      time: block.start,
+      sortKey: block.sortKey || '99:99',
+      priority: 'med',
+      done: false,
+      date: today,
+      habitId: h.id,
+    });
+    h.lastTaskGeneratedOn = today;
+    changed = true;
+  });
+
+  if (changed) {
+    state.tasks.sort((a, b) => (a.sortKey || '99:99').localeCompare(b.sortKey || '99:99'));
+    saveState();
+  }
+  return changed;
+}
+
+// Runs every 30s while the app is open/backgrounded. Checks each habit linked to a block;
+// if current time has reached the block's start time and we haven't notified for it today
+// and the habit isn't already marked done today, fire a notification once.
+function checkHabitNotifications() {
+  if (!state.notifsEnabled) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const today = todayDateString();
+  const dayIndex = ((now.getDay() + 6) % 7); // Mon=0, matches habit.days indexing used elsewhere
+
+  let changed = false;
+  state.habits.forEach(h => {
+    if (!h.blockId) return;
+    const block = state.blocks.find(b => b.id === h.blockId);
+    if (!block) return;
+    const blockMinutes = timeStringToMinutes(block.sortKey || block.start);
+    if (blockMinutes === null) return;
+
+    const alreadyNotifiedToday = h.notifiedOn === today;
+    const alreadyDoneToday = h.days[dayIndex];
+    // Fire within a 1-minute window of the scheduled time so we don't miss it between checks,
+    // but don't fire if we're now way past it (e.g. app was closed during that time).
+    const withinWindow = nowMinutes >= blockMinutes && nowMinutes < blockMinutes + 2;
+
+    if (withinWindow && !alreadyNotifiedToday && !alreadyDoneToday) {
+      fireHabitNotification(h, block);
+      h.notifiedOn = today;
+      changed = true;
+    }
+  });
+  if (changed) saveState();
+}
+
+let notificationIntervalId = null;
+function startNotificationEngine() {
+  if (notificationIntervalId) return; // already running
+  checkHabitNotifications(); // run once immediately on start
+  notificationIntervalId = setInterval(checkHabitNotifications, 30000);
+}
+function stopNotificationEngine() {
+  if (notificationIntervalId) { clearInterval(notificationIntervalId); notificationIntervalId = null; }
+}
+
+async function toggleNotifications() {
+  if (!state.notifsEnabled) {
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      alert('Notifications were not enabled. You can allow them later from your browser settings.');
+      return;
+    }
+    state.notifsEnabled = true;
+    startNotificationEngine();
+  } else {
+    state.notifsEnabled = false;
+    stopNotificationEngine();
+  }
+  saveState();
+  renderNotifToggle();
+}
+
+function renderNotifToggle() {
+  const btn = document.getElementById('notifToggleBtn');
+  if (!btn) return;
+  const supported = 'Notification' in window;
+  if (!supported) {
+    btn.textContent = '🔔 Not supported in this browser';
+    btn.disabled = true;
+    return;
+  }
+  btn.textContent = state.notifsEnabled ? '🔔 Habit reminders ON' : '🔕 Enable habit reminders';
+  btn.classList.toggle('btn-primary', !state.notifsEnabled);
+  btn.classList.toggle('btn-ghost', state.notifsEnabled);
+}
+
+// ── INIT ──
+loadState();
+initDate();
+generateDailyHabitTasks(); // create today's tasks for reminder-linked habits before first render
+renderTasks();
+renderSchedule();
+renderHabits();
+renderHabitBlockOptions();
+renderNotifToggle();
+
+// Show onboarding only on a genuinely first run (no profile saved yet). If the person already
+// completed it in a previous session, hide the overlay immediately and populate the real profile.
+if (hasCompletedOnboarding()) {
+  document.getElementById('onboardingOverlay').classList.add('hidden');
+  renderProfile();
+} else {
+  showOnboardingStep(1);
+  // Prevent keyboard/screen-reader focus from reaching the app underneath the full-screen
+  // onboarding overlay — otherwise tabbing or VoiceOver/TalkBack could still navigate into
+  // the bottom nav and screens hidden behind it.
+  document.getElementById('app').setAttribute('aria-hidden', 'true');
+  document.getElementById('app').setAttribute('inert', '');
+}
+
+if (state.notifsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+  startNotificationEngine();
+}
+
+// Keep the "in progress" block highlight on the Schedule screen fresh while the app is open,
+// independent of whether notifications are enabled — this is a pure visual feature and shouldn't
+// depend on notification permission at all.
+let scheduleHighlightIntervalId = setInterval(() => {
+  if (state.currentScreen === 'schedule') renderSchedule();
+}, 30000);
+
+// Pause the interval when the tab isn't visible to save battery, resume (and catch up) when it is.
+// This does NOT enable closed-app notifications — it just avoids wasted checks while backgrounded
+// for long periods, then re-checks immediately when the user returns.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    // If the app was left open/backgrounded overnight, this catches the day rollover and
+    // generates today's habit tasks the moment the user comes back, not just on a hard reload.
+    const generated = generateDailyHabitTasks();
+    if (generated) renderTasks();
+    if (state.notifsEnabled) checkHabitNotifications();
+    if (state.currentScreen === 'schedule') renderSchedule(); // refresh the in-progress highlight immediately on return
+  }
+});
+
+// If mood was saved from a previous session today, reflect it in the UI
+if (state.mood) {
+  const savedBtn = document.querySelector(`.mood-btn[data-mood="${state.mood}"]`);
+  if (savedBtn) selectMood(savedBtn);
+}
+
+// Enter key submits the active add form (matches expected mobile keyboard behavior)
+document.getElementById('taskInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+document.getElementById('blockTitle').addEventListener('keydown', e => { if (e.key === 'Enter') addBlock(); });
+document.getElementById('habitName').addEventListener('keydown', e => { if (e.key === 'Enter') addHabit(); });
+document.getElementById('editHabitName').addEventListener('keydown', e => { if (e.key === 'Enter') saveEditedHabit(); });
+['obName', 'obAge', 'obHeight', 'obWeight'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') onboardingNext(); });
+});
+document.getElementById('obCustomHabitInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCustomOnboardingHabit(); } });
+
+// ── ACCESSIBILITY: make every clickable <div> behave like a real button ──
+// (keyboard focusable, Enter/Space activates it, screen readers announce it correctly)
+function enhanceClickableDivs(root = document) {
+  root.querySelectorAll('div[onclick]').forEach(el => {
+    if (el.hasAttribute('data-a11y-done')) return;
+    el.setAttribute('data-a11y-done', 'true');
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    if (!el.hasAttribute('aria-label')) {
+      const label = el.textContent.trim().replace(/\s+/g, ' ').slice(0, 60);
+      if (label) el.setAttribute('aria-label', label);
+    }
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+}
+enhanceClickableDivs();
+// Re-run after dynamic re-renders so newly added tasks/habits/blocks are accessible too
+const _origRenderTasks = renderTasks, _origRenderSchedule = renderSchedule, _origRenderHabits = renderHabits;
+renderTasks = function() { _origRenderTasks(); enhanceClickableDivs(document.getElementById('taskList')); };
+renderSchedule = function() { _origRenderSchedule(); enhanceClickableDivs(document.getElementById('timeline')); };
+renderHabits = function() { _origRenderHabits(); enhanceClickableDivs(document.getElementById('habitList')); };
+
+// aria-label on form inputs (screen readers need these even though placeholders look fine visually)
+document.getElementById('taskInput').setAttribute('aria-label', 'Task description');
+document.getElementById('taskPriority').setAttribute('aria-label', 'Task priority');
+document.getElementById('blockTitle').setAttribute('aria-label', 'Time block title');
+document.getElementById('blockColor').setAttribute('aria-label', 'Time block category color');
+document.getElementById('habitName').setAttribute('aria-label', 'Habit name');
+document.getElementById('habitIcon').setAttribute('aria-label', 'Habit icon');
+</script>
+
+<!-- INLINE SERVICE WORKER via blob -->
+<script>
+if ('serviceWorker' in navigator) {
+  // CACHE_VERSION changes on every load (timestamp-based) so a stale service worker from a
+  // previous preview/session never silently serves old cached content forever. Combined with
+  // a network-first fetch strategy below, this means: try the network first (always get the
+  // latest file), and only fall back to cache if genuinely offline.
+  const CACHE_VERSION = 'planr-v' + Date.now();
+  const swCode = `
+    const CACHE = '${CACHE_VERSION}';
+    self.addEventListener('install', e => {
+      self.skipWaiting(); // activate this new worker immediately instead of waiting for old tabs to close
+    });
+    self.addEventListener('activate', e => {
+      // Delete every cache that isn't this version — clears out stale content from old sessions.
+      e.waitUntil(
+        caches.keys().then(keys => Promise.all(
+          keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+        ))
+      );
+      self.clients.claim();
+    });
+    self.addEventListener('fetch', e => {
+      // Network-first: always try to fetch the latest version. Only serve from cache if the
+      // network request fails (e.g. genuinely offline), which is what offline support actually
+      // needs — it should never mean "permanently stuck on an old cached copy while online".
+      e.respondWith(
+        fetch(e.request).then(response => {
+          const copy = response.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+          return response;
+        }).catch(() => caches.match(e.request))
+      );
+    });
+  `;
+  const blob = new Blob([swCode], { type: 'application/javascript' });
+  const url  = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(url).then(reg => {
+    // If an older service worker from a previous load is already controlling this page,
+    // force an update check immediately rather than waiting for the browser's own timing.
+    reg.update().catch(() => {});
+  }).catch(() => {});
+}
+</script>
+
+</body>
+</html>
