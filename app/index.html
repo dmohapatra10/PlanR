@@ -2383,6 +2383,14 @@ function enhanceClickableDivs(root = document) {
       if (label) el.setAttribute('aria-label', label);
     }
     el.addEventListener('keydown', e => {
+      // If the key event originated from an actual form field (text input, textarea, select),
+      // let it behave normally — Space must type a space and Enter must do whatever that field's
+      // own handler does. Without this check, typing a space anywhere inside a clickable div
+      // (e.g. the modal overlay, which is clickable to dismiss it) would incorrectly trigger
+      // this div's own click handler instead of typing into the field, since keydown bubbles up.
+      const targetTag = e.target.tagName;
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') return;
+
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         el.click();
