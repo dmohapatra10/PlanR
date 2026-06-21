@@ -558,11 +558,15 @@
     padding: 12px 14px; border-radius: var(--radius-sm); background: var(--glass);
     border: 1px solid var(--border);
   }
+  .onboarding-time-review-row-v2 { flex-direction: column; align-items: stretch; gap: 10px; }
   .onboarding-time-review-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+  .onboarding-time-range { display: flex; gap: 10px; }
+  .onboarding-time-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .onboarding-time-field-label { font-size: 10px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: .5px; }
   .onboarding-time-review-row input[type="time"] {
     background: var(--glass-mid); border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 6px 8px;
-    color-scheme: dark; width: 110px;
+    color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px;
+    color-scheme: dark; width: 100%;
   }
   .onboarding-no-habits-msg { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); text-align: center; padding: 16px 0; }
 
@@ -669,7 +673,7 @@
       <div class="onboarding-title">Pick your habits</div>
       <div class="onboarding-sub">We'll schedule reminders and daily tasks for these automatically</div>
       <div class="onboarding-habit-grid" id="obHabitGrid">
-        <!-- populated by JS from CURATED_HABITS -->
+        <!-- populated by JS based on the goal selected in step 5 -->
       </div>
       <div class="onboarding-custom-habit-row">
         <input class="input" id="obCustomHabitInput" placeholder="Or type your own habit..." type="text" aria-label="Custom habit name"/>
@@ -1068,27 +1072,14 @@
 <script>
 // ── DATA STATE ──
 const state = {
-  tasks: [
-    { id:1, text:'Finish vision board', time:'9:00 AM', sortKey:'09:00', priority:'high', done:false, date:null, habitId:null },
-    { id:2, text:'Read 10 pages of Atomic Habits', time:'11:00 AM', sortKey:'11:00', priority:'med', done:true, date:null, habitId:null },
-    { id:3, text:'Film TikTok for study routine', time:'2:00 PM', sortKey:'14:00', priority:'med', done:false, date:null, habitId:null },
-    { id:4, text:'Respond to DMs + emails', time:'4:00 PM', sortKey:'16:00', priority:'low', done:false, date:null, habitId:null },
-    { id:5, text:'Night skincare + journal', time:'9:30 PM', sortKey:'21:30', priority:'low', done:false, date:null, habitId:null },
-  ],
-  habits: [
-    { id:1, icon:'💧', name:'Drink 8 glasses', streak:12, days:[true,true,true,true,false,false,false], blockId:null, lastTaskGeneratedOn:null },
-    { id:2, icon:'🏃', name:'Move your body 30min', streak:5,  days:[true,true,false,true,false,false,false], blockId:4, lastTaskGeneratedOn:null },
-    { id:3, icon:'📖', name:'Read 10 pages', streak:7,  days:[true,true,true,true,true,false,false], blockId:null, lastTaskGeneratedOn:null },
-    { id:4, icon:'🧘', name:'Morning meditation', streak:3,  days:[false,true,false,true,false,false,false], blockId:1, lastTaskGeneratedOn:null },
-    { id:5, icon:'✍️', name:'Journal entry', streak:7,  days:[true,true,true,true,true,false,false], blockId:5, lastTaskGeneratedOn:null },
-  ],
-  blocks: [
-    { id:1, title:'Morning Routine', start:'7:00 AM', end:'8:30 AM', color:'pink', sortKey:'07:00' },
-    { id:2, title:'Deep Work — Study', start:'9:00 AM', end:'11:00 AM', color:'purple', sortKey:'09:00' },
-    { id:3, title:'Content Creation', start:'2:00 PM', end:'3:30 PM', color:'cyan', sortKey:'14:00' },
-    { id:4, title:'Workout', start:'5:00 PM', end:'6:00 PM', color:'green', sortKey:'17:00' },
-    { id:5, title:'Wind Down', start:'9:30 PM', end:'10:30 PM', color:'pink', sortKey:'21:30' },
-  ],
+  // These arrays intentionally start empty. A genuinely fresh install should have zero tasks,
+  // habits, or schedule blocks until either onboarding creates them (based on what the person
+  // actually selects) or they add things manually. Previous versions shipped hardcoded demo
+  // data here, which caused duplicate-looking habits/tasks once onboarding added real ones with
+  // the same names — this was a real bug, not intended seed content.
+  tasks: [],
+  habits: [],
+  blocks: [],
   mood: null,
   moodHistory: [], // [{ date: 'YYYY-MM-DD', mood: 'Happy' }, ...] — one entry per day, overwritten on re-check-in
   notifsEnabled: false,
@@ -1118,14 +1109,6 @@ const colorMap = {
   purple: 'var(--neon-purple)', pink: 'var(--neon-pink)',
   cyan: 'var(--neon-cyan)', green: 'var(--neon-green)',
 };
-
-// The 5 demo tasks above ship with date:null. Stamp them with "today" on first run so the
-// app looks correct no matter what date someone opens it on (this only runs once, since after
-// the first save, loadState() will restore real dates from localStorage instead of re-stamping).
-(function stampDemoTaskDates() {
-  const today = new Date().toISOString().slice(0, 10);
-  state.tasks.forEach(t => { if (!t.date) t.date = today; });
-})();
 
 // ── NAVIGATION ──
 function navigate(screen) {
@@ -1315,6 +1298,14 @@ function renderHabits() {
   const todayIdx = ((new Date().getDay() + 6) % 7); // Mon=0
   const todayStr = todayDateString();
   let totalChecks = 0, maxChecks = 0;
+
+  if (!state.habits.length) {
+    document.getElementById('habitList').innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No habits yet. Hit + to add one ✦</div>';
+    document.getElementById('weekProgress').style.width = '0%';
+    document.getElementById('weekPercent').textContent = '0% done';
+    renderTaskHabitOptions();
+    return;
+  }
 
   document.getElementById('habitList').innerHTML = state.habits.map(h => {
     const linkedBlock = h.blockId ? state.blocks.find(b => b.id === h.blockId) : null;
@@ -1675,22 +1666,90 @@ let selectedGoal = null;
 
 // Curated habits offered during onboarding, each with a sensible *default* time — not adaptive
 // AI scheduling, just reasonable starting points the person can freely edit in step 7 or later.
-const CURATED_HABITS = [
-  { id: 'hydration',  icon: '💧', name: 'Drink 8 glasses',     defaultTime: '08:00' },
-  { id: 'exercise',   icon: '🏃', name: 'Move your body 30min', defaultTime: '17:00' },
-  { id: 'reading',    icon: '📖', name: 'Read 10 pages',        defaultTime: '21:00' },
-  { id: 'meditation', icon: '🧘', name: 'Morning meditation',   defaultTime: '07:00' },
-  { id: 'sleep',      icon: '🌙', name: 'Wind down for sleep',  defaultTime: '22:00' },
-  { id: 'journaling', icon: '✍️', name: 'Journal entry',        defaultTime: '21:30' },
-];
+// Habit suggestions are goal-specific — what's relevant for "Get Fit" isn't the same as what's
+// relevant for "Stay Focused". Each goal offers 10+ habits so there's real choice, not padding.
+const HABITS_BY_GOAL = {
+  habits: [
+    { id: 'hydration',    icon: '💧', name: 'Drink 8 glasses',        defaultTime: '08:00', defaultDurationMin: 5 },
+    { id: 'meditation',   icon: '🧘', name: 'Morning meditation',      defaultTime: '07:00', defaultDurationMin: 15 },
+    { id: 'journaling',   icon: '✍️', name: 'Journal entry',           defaultTime: '21:30', defaultDurationMin: 10 },
+    { id: 'reading',      icon: '📖', name: 'Read 10 pages',           defaultTime: '21:00', defaultDurationMin: 20 },
+    { id: 'sleep',        icon: '🌙', name: 'Wind down for sleep',     defaultTime: '22:00', defaultDurationMin: 20 },
+    { id: 'gratitude',    icon: '🙏', name: 'Write 3 gratitudes',      defaultTime: '21:45', defaultDurationMin: 5 },
+    { id: 'no-snooze',    icon: '⏰', name: 'No snooze, get up first alarm', defaultTime: '06:30', defaultDurationMin: 5 },
+    { id: 'tidy',         icon: '🧹', name: 'Tidy your space 10min',   defaultTime: '19:00', defaultDurationMin: 10 },
+    { id: 'plan-tomorrow',icon: '🗓️', name: 'Plan tomorrow tonight',   defaultTime: '21:00', defaultDurationMin: 10 },
+    { id: 'screen-limit', icon: '📵', name: 'No phone first 30min',    defaultTime: '07:00', defaultDurationMin: 30 },
+    { id: 'stretch',      icon: '🤸', name: 'Stretch 5 minutes',       defaultTime: '08:15', defaultDurationMin: 5 },
+  ],
+  focus: [
+    { id: 'deep-work',    icon: '🎯', name: 'Deep work block',         defaultTime: '09:00', defaultDurationMin: 60 },
+    { id: 'no-phone-am',  icon: '📵', name: 'No phone first 30min',    defaultTime: '07:00', defaultDurationMin: 30 },
+    { id: 'pomodoro',     icon: '🍅', name: 'One pomodoro session',    defaultTime: '10:00', defaultDurationMin: 25 },
+    { id: 'single-task',  icon: '✅', name: 'Pick ONE top priority',   defaultTime: '08:30', defaultDurationMin: 10 },
+    { id: 'inbox-zero',   icon: '📥', name: 'Clear inbox/messages',    defaultTime: '17:00', defaultDurationMin: 15 },
+    { id: 'meditation-f', icon: '🧘', name: 'Focus meditation',        defaultTime: '07:30', defaultDurationMin: 15 },
+    { id: 'plan-day',     icon: '🗓️', name: 'Plan today\'s priorities', defaultTime: '08:00', defaultDurationMin: 10 },
+    { id: 'review-day',   icon: '🔁', name: 'Review what got done',    defaultTime: '20:30', defaultDurationMin: 10 },
+    { id: 'limit-tabs',   icon: '🧠', name: 'Close distracting tabs',  defaultTime: '09:15', defaultDurationMin: 5 },
+    { id: 'reading-f',    icon: '📖', name: 'Read something focused',  defaultTime: '21:00', defaultDurationMin: 20 },
+    { id: 'walk-reset',   icon: '🚶', name: 'Short walk to reset',     defaultTime: '13:00', defaultDurationMin: 15 },
+  ],
+  fitness: [
+    { id: 'exercise',     icon: '🏃', name: 'Move your body 30min',    defaultTime: '17:00', defaultDurationMin: 30 },
+    { id: 'hydration-fit',icon: '💧', name: 'Drink 8 glasses',         defaultTime: '08:00', defaultDurationMin: 5 },
+    { id: 'stretch-fit',  icon: '🤸', name: 'Stretch / mobility work', defaultTime: '07:30', defaultDurationMin: 15 },
+    { id: 'steps',        icon: '👟', name: 'Hit your daily steps',    defaultTime: '12:00', defaultDurationMin: 30 },
+    { id: 'protein',      icon: '🥚', name: 'Protein with every meal', defaultTime: '13:00', defaultDurationMin: 10 },
+    { id: 'sleep-fit',    icon: '🌙', name: 'Wind down for sleep',     defaultTime: '22:00', defaultDurationMin: 20 },
+    { id: 'strength',     icon: '🏋️', name: 'Strength training',       defaultTime: '18:00', defaultDurationMin: 45 },
+    { id: 'cardio',       icon: '🚴', name: 'Cardio session',          defaultTime: '06:30', defaultDurationMin: 30 },
+    { id: 'posture',      icon: '🧍', name: 'Posture / desk break',    defaultTime: '15:00', defaultDurationMin: 10 },
+    { id: 'meal-prep',    icon: '🍱', name: 'Prep tomorrow\'s meals',  defaultTime: '19:30', defaultDurationMin: 30 },
+    { id: 'recovery',     icon: '🛁', name: 'Recovery / rest stretch', defaultTime: '21:00', defaultDurationMin: 15 },
+  ],
+  balance: [
+    { id: 'meditation-b', icon: '🧘', name: 'Morning meditation',      defaultTime: '07:00', defaultDurationMin: 15 },
+    { id: 'journaling-b', icon: '✍️', name: 'Journal entry',           defaultTime: '21:30', defaultDurationMin: 10 },
+    { id: 'gratitude-b',  icon: '🙏', name: 'Write 3 gratitudes',      defaultTime: '21:45', defaultDurationMin: 5 },
+    { id: 'sleep-b',      icon: '🌙', name: 'Wind down for sleep',     defaultTime: '22:00', defaultDurationMin: 20 },
+    { id: 'nature',       icon: '🌿', name: 'Time outside / nature',  defaultTime: '16:00', defaultDurationMin: 20 },
+    { id: 'unplug',       icon: '📵', name: 'Unplug for an hour',      defaultTime: '20:00', defaultDurationMin: 60 },
+    { id: 'connect',      icon: '💬', name: 'Check in with someone',  defaultTime: '18:30', defaultDurationMin: 15 },
+    { id: 'breathing',    icon: '🌬️', name: 'Breathing exercise',      defaultTime: '12:30', defaultDurationMin: 5 },
+    { id: 'hydration-b',  icon: '💧', name: 'Drink 8 glasses',         defaultTime: '08:00', defaultDurationMin: 5 },
+    { id: 'slow-morning', icon: '☕', name: 'Slow, unrushed morning',  defaultTime: '07:00', defaultDurationMin: 20 },
+    { id: 'reflect',      icon: '🪞', name: 'Reflect on the day',      defaultTime: '21:15', defaultDurationMin: 10 },
+  ],
+};
 const CUSTOM_HABIT_DEFAULT_TIME = '18:00'; // generic fallback for anything the person types in themselves
+const CUSTOM_HABIT_DEFAULT_DURATION_MIN = 15;
 
-let selectedCuratedHabitIds = []; // subset of CURATED_HABITS ids
+let selectedCuratedHabitIds = []; // subset of the active goal's habit ids
 let customOnboardingHabits = [];  // [{ name }] — times for these live in onboardingHabitTimes too
-let onboardingHabitTimes = {};    // key -> 'HH:MM', key is curated id or `custom:<index>`
+let onboardingHabitTimes = {};    // key -> { start: 'HH:MM', end: 'HH:MM' }, key is curated id or `custom:<index>`
+
+// Converts minutes-since-midnight back into a 24h "HH:MM" string (inverse of timeStringToMinutes,
+// which already exists later in the script but only converts the other direction).
+function minutesToTimeString(totalMinutes) {
+  const wrapped = ((totalMinutes % 1440) + 1440) % 1440; // wrap safely past midnight if needed
+  const h = Math.floor(wrapped / 60);
+  const m = wrapped % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+function defaultEndTimeFor(startTime24, durationMin) {
+  const [h, m] = startTime24.split(':').map(Number);
+  return minutesToTimeString(h * 60 + m + durationMin);
+}
+
+function getActiveGoalHabits() {
+  return HABITS_BY_GOAL[selectedGoal] || HABITS_BY_GOAL.habits; // fallback just in case goal wasn't set yet
+}
 
 function renderOnboardingHabitGrid() {
-  document.getElementById('obHabitGrid').innerHTML = CURATED_HABITS.map(h => `
+  const habitsForGoal = getActiveGoalHabits();
+  document.getElementById('obHabitGrid').innerHTML = habitsForGoal.map(h => `
     <div class="onboarding-habit-btn${selectedCuratedHabitIds.includes(h.id) ? ' selected' : ''}"
          onclick="toggleCuratedHabit('${h.id}')" role="button" tabindex="0" aria-label="${h.name}">
       <div class="onboarding-habit-icon">${h.icon}</div>
@@ -1704,8 +1763,9 @@ function toggleCuratedHabit(id) {
   const idx = selectedCuratedHabitIds.indexOf(id);
   if (idx === -1) {
     selectedCuratedHabitIds.push(id);
-    const habit = CURATED_HABITS.find(h => h.id === id);
-    onboardingHabitTimes[id] = habit.defaultTime;
+    const habit = getActiveGoalHabits().find(h => h.id === id);
+    const duration = habit.defaultDurationMin || 15;
+    onboardingHabitTimes[id] = { start: habit.defaultTime, end: defaultEndTimeFor(habit.defaultTime, duration) };
   } else {
     selectedCuratedHabitIds.splice(idx, 1);
     delete onboardingHabitTimes[id];
@@ -1720,7 +1780,10 @@ function addCustomOnboardingHabit() {
   if (!name) return;
   const key = `custom:${customOnboardingHabits.length}`;
   customOnboardingHabits.push({ name, key });
-  onboardingHabitTimes[key] = CUSTOM_HABIT_DEFAULT_TIME;
+  onboardingHabitTimes[key] = {
+    start: CUSTOM_HABIT_DEFAULT_TIME,
+    end: defaultEndTimeFor(CUSTOM_HABIT_DEFAULT_TIME, CUSTOM_HABIT_DEFAULT_DURATION_MIN),
+  };
   input.value = '';
   renderCustomOnboardingHabitList();
   document.getElementById('obError').textContent = '';
@@ -1743,8 +1806,9 @@ function renderCustomOnboardingHabitList() {
 }
 
 function getAllSelectedOnboardingHabits() {
+  const habitsForGoal = getActiveGoalHabits();
   const curated = selectedCuratedHabitIds.map(id => {
-    const h = CURATED_HABITS.find(c => c.id === id);
+    const h = habitsForGoal.find(c => c.id === id);
     return { key: id, icon: h.icon, name: h.name };
   });
   const custom = customOnboardingHabits.map(h => ({ key: h.key, icon: '⭐', name: h.name }));
@@ -1758,13 +1822,46 @@ function renderOnboardingTimeReview() {
     list.innerHTML = '<div class="onboarding-no-habits-msg">No habits selected — that\'s okay, you can add some anytime from the Habits tab.</div>';
     return;
   }
-  list.innerHTML = all.map(h => `
-    <div class="onboarding-time-review-row">
+  list.innerHTML = all.map(h => {
+    const times = onboardingHabitTimes[h.key] || { start: CUSTOM_HABIT_DEFAULT_TIME, end: defaultEndTimeFor(CUSTOM_HABIT_DEFAULT_TIME, CUSTOM_HABIT_DEFAULT_DURATION_MIN) };
+    return `
+    <div class="onboarding-time-review-row onboarding-time-review-row-v2">
       <div class="onboarding-time-review-label"><span>${h.icon}</span><span>${h.name}</span></div>
-      <input type="time" value="${onboardingHabitTimes[h.key] || CUSTOM_HABIT_DEFAULT_TIME}"
-             onchange="onboardingHabitTimes['${h.key}'] = this.value" aria-label="Reminder time for ${h.name}"/>
-    </div>
-  `).join('');
+      <div class="onboarding-time-range">
+        <div class="onboarding-time-field">
+          <span class="onboarding-time-field-label">From</span>
+          <input type="time" value="${times.start}"
+                 onchange="updateOnboardingHabitTime('${h.key}', 'start', this.value)" aria-label="Start time for ${h.name}"/>
+        </div>
+        <div class="onboarding-time-field">
+          <span class="onboarding-time-field-label">To</span>
+          <input type="time" value="${times.end}"
+                 onchange="updateOnboardingHabitTime('${h.key}', 'end', this.value)" aria-label="End time for ${h.name}"/>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Updates one side (start or end) of a habit's reminder time range. If the edit would make
+// end <= start (e.g. crossing midnight isn't supported here, or the person fat-fingered it),
+// we nudge the end time forward by the habit's original default duration instead of silently
+// allowing an invalid/zero-length block — this is exactly the bug being fixed: every habit
+// must end up with a genuinely different start and end time.
+function updateOnboardingHabitTime(key, field, value) {
+  if (!onboardingHabitTimes[key]) {
+    onboardingHabitTimes[key] = { start: CUSTOM_HABIT_DEFAULT_TIME, end: defaultEndTimeFor(CUSTOM_HABIT_DEFAULT_TIME, CUSTOM_HABIT_DEFAULT_DURATION_MIN) };
+  }
+  onboardingHabitTimes[key][field] = value;
+
+  const { start, end } = onboardingHabitTimes[key];
+  const startMin = parseInt(start.split(':')[0], 10) * 60 + parseInt(start.split(':')[1], 10);
+  let endMin = parseInt(end.split(':')[0], 10) * 60 + parseInt(end.split(':')[1], 10);
+  if (endMin <= startMin) {
+    endMin = startMin + CUSTOM_HABIT_DEFAULT_DURATION_MIN;
+    onboardingHabitTimes[key].end = minutesToTimeString(endMin);
+    renderOnboardingTimeReview(); // re-render so the corrected end time is visibly reflected
+  }
 }
 
 function showOnboardingStep(step) {
@@ -1808,7 +1905,16 @@ function onboardingValidateStep(step) {
 function selectGoal(el) {
   document.querySelectorAll('.onboarding-goal-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
-  selectedGoal = el.dataset.goal;
+  const newGoal = el.dataset.goal;
+
+  // If the goal actually changed (not just re-clicking the same one), clear any habit
+  // selections made under the previous goal — they belong to a different goal's habit list
+  // and would otherwise reference IDs that don't exist in the new list.
+  if (selectedGoal !== newGoal) {
+    selectedCuratedHabitIds.forEach(id => delete onboardingHabitTimes[id]);
+    selectedCuratedHabitIds = [];
+  }
+  selectedGoal = newGoal;
   document.getElementById('obError').textContent = '';
 }
 
@@ -1863,17 +1969,20 @@ function finishOnboarding() {
 
   state.profile = { name, age, heightCm, weightKg, goal: selectedGoal };
 
-  // For every habit chosen in onboarding, create a matching schedule block at the (possibly
-  // edited) reminder time, then create the habit linked to that block — reusing the exact same
-  // block + habit + reminder system used everywhere else in the app, just pre-filled here.
+  // For every habit chosen in onboarding, create a matching schedule block using the (possibly
+  // edited) start AND end time from the time-review step — previously this only captured a
+  // single time and used it for both start and end, which is why the Schedule screen showed
+  // identical start/end times for onboarding-created blocks. Now both sides are real and distinct.
   const allHabits = getAllSelectedOnboardingHabits();
   allHabits.forEach(h => {
-    const time24 = onboardingHabitTimes[h.key] || CUSTOM_HABIT_DEFAULT_TIME;
-    const { display, sortKey } = onboardingTimeToBlockFields(time24);
+    const times = onboardingHabitTimes[h.key] || { start: CUSTOM_HABIT_DEFAULT_TIME, end: defaultEndTimeFor(CUSTOM_HABIT_DEFAULT_TIME, CUSTOM_HABIT_DEFAULT_DURATION_MIN) };
+    const startFields = onboardingTimeToBlockFields(times.start);
+    const endFields = onboardingTimeToBlockFields(times.end);
 
     const blockId = state.nextId++;
     state.blocks.push({
-      id: blockId, title: h.name, start: display, end: display, color: 'purple', sortKey,
+      id: blockId, title: h.name, start: startFields.display, end: endFields.display,
+      color: 'purple', sortKey: startFields.sortKey,
     });
 
     state.habits.push({
