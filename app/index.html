@@ -183,6 +183,36 @@
   }
   .task-item:last-child { border-bottom: none; padding-bottom: 0; }
   .task-item.done { opacity: .45; }
+
+  /* ── HABIT GROUPS (Today screen) ── */
+  .habit-group { border-bottom: 1px solid var(--border); padding: 12px 0; }
+  .habit-group:last-child { border-bottom: none; }
+  .habit-group-header {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .habit-group-header-other { cursor: default; }
+  .habit-group-expand-icon {
+    width: 28px; height: 28px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--neon-purple); font-size: 18px; font-weight: 700;
+    transition: transform .15s;
+  }
+  .habit-group-icon {
+    width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 15px;
+    background: var(--glass-mid); border: 1px solid var(--border);
+  }
+  .habit-group-info { flex: 1; min-width: 0; }
+  .habit-group-name { font-size: 14px; font-weight: 500; }
+  .habit-group-sub { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 1px; }
+  .habit-group-progress { margin: 10px 0 0 38px; }
+  .habit-group-progress .prog-wrap { height: 5px; }
+  .habit-group-children {
+    margin: 10px 0 0 38px; padding-left: 12px; border-left: 1px solid var(--border);
+  }
+  .task-item-nested { padding: 10px 0; }
+  .task-item-nested:first-child { padding-top: 4px; }
   .cb {
     width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
     border: 1.5px solid var(--border-hi);
@@ -191,12 +221,26 @@
     margin-top: 1px;
   }
   .task-item.done .cb {
-    background: var(--neon-purple); border-color: var(--neon-purple);
+    background: var(--neon-green); border-color: var(--neon-green);
+    box-shadow: 0 0 12px rgba(57,255,136,.5);
   }
   .cb-check { display: none; color: #fff; font-size: 11px; font-weight: 700; }
   .task-item.done .cb-check { display: block; }
   .task-text { flex: 1; font-size: 14px; line-height: 1.5; }
-  .task-item.done .task-text { text-decoration: line-through; color: var(--text-muted); }
+  .task-item.done .task-text { color: var(--text-muted); }
+  .task-item.done { background: rgba(57,255,136,.05); border-radius: var(--radius-sm); }
+  .task-done-badge {
+    display: none; align-items: center; gap: 3px;
+    font-size: 10px; font-family: var(--font-mono); font-weight: 600;
+    color: var(--neon-green); margin-top: 3px;
+    animation: done-pop .3s ease;
+  }
+  .task-item.done .task-done-badge { display: inline-flex; }
+  @keyframes done-pop {
+    0% { transform: scale(0.7); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); }
+  }
   .task-meta { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); margin-top: 2px; }
 
   /* ── HABIT ROW ── */
@@ -1123,6 +1167,17 @@ function navigate(screen) {
 }
 
 // ── RENDER TODAY ──
+// Tracks which habit groups are expanded on the Today screen. Intentionally NOT persisted to
+// localStorage — every fresh app load starts fully collapsed, per how this was designed: a
+// clean overview first, with detail available on demand rather than always-on.
+let expandedHabitGroups = new Set();
+
+function toggleHabitGroupExpanded(habitId) {
+  if (expandedHabitGroups.has(habitId)) expandedHabitGroups.delete(habitId);
+  else expandedHabitGroups.add(habitId);
+  renderTasks();
+}
+
 function renderTasks() {
   const list = document.getElementById('taskList');
   const today = todayDateString();
@@ -1136,27 +1191,92 @@ function renderTasks() {
   const pct = total ? Math.round(done / total * 100) : 0;
   document.getElementById('taskProgress').style.width = pct + '%';
 
-  let html = '';
-
   if (!todaysTasks.length && !missedTasks.length) {
     list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No tasks yet. Hit + to add one ✦</div>';
     return;
   }
 
-  if (todaysTasks.length) {
-    html += todaysTasks.map(t => {
-      const habit = t.habitId ? state.habits.find(h => h.id === t.habitId) : null;
-      return `
-      <div class="task-item${t.done ? ' done' : ''}" onclick="toggleTask(${t.id})">
-        <div class="cb"><span class="cb-check">✓</span></div>
-        <div style="flex:1">
-          <div class="task-text">${t.text}${habit ? ' <span style="color:var(--neon-purple)">· ' + habit.icon + ' habit</span>' : ''}</div>
-          <div class="task-meta">${t.time || ''} ${t.priority === 'high' ? '· 🔴 HIGH' : t.priority === 'low' ? '· 🟢 LOW' : '· 🟡 MED'}</div>
+  let html = '';
+
+  // Group today's tasks by their linked habit. Tasks with no habitId fall into "Other Tasks".
+  const tasksByHabit = new Map(); // habitId -> [tasks]
+  const otherTasks = [];
+  todaysTasks.forEach(t => {
+    if (t.habitId && state.habits.some(h => h.id === t.habitId)) {
+      if (!tasksByHabit.has(t.habitId)) tasksByHabit.set(t.habitId, []);
+      tasksByHabit.get(t.habitId).push(t);
+    } else {
+      otherTasks.push(t);
+    }
+  });
+
+  // Render one collapsible group per habit that has at least one task today. Habits with no
+  // task today simply don't appear in this list at all (they'd show as Missed on the Habits
+  // screen instead — Today only ever shows what's actually relevant to act on today).
+  state.habits.forEach(h => {
+    const subTasks = tasksByHabit.get(h.id);
+    if (!subTasks || !subTasks.length) return;
+
+    const { statusLabel, statusClass, progressPct } = computeHabitTodayStatus(h);
+    const isExpanded = expandedHabitGroups.has(h.id);
+    const subDone = subTasks.filter(t => t.done).length;
+
+    html += `
+      <div class="habit-group">
+        <div class="habit-group-header" onclick="toggleHabitGroupExpanded(${h.id})" role="button" tabindex="0" aria-label="${isExpanded ? 'Collapse' : 'Expand'} ${h.name}">
+          <div class="habit-group-expand-icon">${isExpanded ? '▾' : '▸'}</div>
+          <div class="habit-group-icon">${h.icon}</div>
+          <div class="habit-group-info">
+            <div class="habit-group-name">${h.name}</div>
+            <div class="habit-group-sub">${subDone}/${subTasks.length} sub-habit${subTasks.length > 1 ? 's' : ''} done</div>
+          </div>
+          <div class="badge ${statusClass}">${statusLabel}</div>
         </div>
-      </div>
-    `;
-    }).join('');
-  } else {
+        <div class="habit-group-progress"><div class="prog-wrap"><div class="prog-fill ${progressPct === 100 ? 'prog-cyan' : 'prog-purple'}" style="width:${progressPct}%"></div></div></div>
+        ${isExpanded ? `
+          <div class="habit-group-children">
+            ${subTasks.map(t => `
+              <div class="task-item task-item-nested${t.done ? ' done' : ''}" onclick="toggleTask(${t.id})">
+                <div class="cb"><span class="cb-check">✓</span></div>
+                <div style="flex:1">
+                  <div class="task-text">${t.text}</div>
+                  <div class="task-meta">${t.time || ''} ${t.priority === 'high' ? '· 🔴 HIGH' : t.priority === 'low' ? '· 🟢 LOW' : '· 🟡 MED'}</div>
+                  <div class="task-done-badge">✓ Done</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>`;
+  });
+
+  // "Other Tasks" — anything not linked to a habit, shown as a flat list like before.
+  if (otherTasks.length) {
+    html += `
+      <div class="habit-group" style="margin-top:${tasksByHabit.size ? '14px' : '0'}">
+        <div class="habit-group-header habit-group-header-other">
+          <div class="habit-group-icon">📋</div>
+          <div class="habit-group-info">
+            <div class="habit-group-name">Other Tasks</div>
+            <div class="habit-group-sub">${otherTasks.filter(t=>t.done).length}/${otherTasks.length} done</div>
+          </div>
+        </div>
+        <div class="habit-group-children">
+          ${otherTasks.map(t => `
+            <div class="task-item task-item-nested${t.done ? ' done' : ''}" onclick="toggleTask(${t.id})">
+              <div class="cb"><span class="cb-check">✓</span></div>
+              <div style="flex:1">
+                <div class="task-text">${t.text}</div>
+                <div class="task-meta">${t.time || ''} ${t.priority === 'high' ? '· 🔴 HIGH' : t.priority === 'low' ? '· 🟢 LOW' : '· 🟡 MED'}</div>
+                <div class="task-done-badge">✓ Done</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }
+
+  if (!tasksByHabit.size && !otherTasks.length) {
     html += '<div style="text-align:center;padding:16px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No tasks for today yet ✦</div>';
   }
 
@@ -1293,6 +1413,34 @@ function habitHasAnyTasks(habitId) {
   return state.tasks.some(t => t.habitId === habitId);
 }
 
+// Computes a habit's Done/Pending/Missed status + progress % for "today", using the same logic
+// in both renderHabits() (Habits screen) and renderTasks() (Today screen's collapsed habit
+// groups), so the two screens can never silently drift out of sync with each other.
+function computeHabitTodayStatus(habit) {
+  const todayIdx = ((new Date().getDay() + 6) % 7); // Mon=0
+  const isTaskDriven = habitHasAnyTasks(habit.id);
+  const todayStats = getHabitDayStats(habit.id, todayDateString());
+
+  if (isTaskDriven) {
+    if (!todayStats.hasTasks) {
+      return { statusLabel: '⚠ MISSED', statusClass: 'badge-pink', progressPct: 0, todayStats, isTaskDriven };
+    } else if (todayStats.done === todayStats.total) {
+      return { statusLabel: '✓ DONE', statusClass: 'badge-green', progressPct: 100, todayStats, isTaskDriven };
+    } else {
+      return {
+        statusLabel: `PENDING ${todayStats.done}/${todayStats.total}`, statusClass: 'badge-purple',
+        progressPct: Math.round(todayStats.ratio * 100), todayStats, isTaskDriven,
+      };
+    }
+  } else {
+    const doneToday = habit.days[todayIdx] || false;
+    return {
+      statusLabel: doneToday ? '✓ DONE' : 'PENDING', statusClass: doneToday ? 'badge-green' : 'badge-purple',
+      progressPct: doneToday ? 100 : 0, todayStats, isTaskDriven,
+    };
+  }
+}
+
 function renderHabits() {
   const wDayLabels = ['M','T','W','T','F','S','S'];
   const todayIdx = ((new Date().getDay() + 6) % 7); // Mon=0
@@ -1309,26 +1457,7 @@ function renderHabits() {
 
   document.getElementById('habitList').innerHTML = state.habits.map(h => {
     const linkedBlock = h.blockId ? state.blocks.find(b => b.id === h.blockId) : null;
-    const isTaskDriven = habitHasAnyTasks(h.id);
-    const todayStats = getHabitDayStats(h.id, todayStr);
-
-    // Determine today's status + progress percentage
-    let statusLabel, statusClass, progressPct;
-    if (isTaskDriven) {
-      if (!todayStats.hasTasks) {
-        statusLabel = '⚠ MISSED'; statusClass = 'badge-pink'; progressPct = 0;
-      } else if (todayStats.done === todayStats.total) {
-        statusLabel = '✓ DONE'; statusClass = 'badge-green'; progressPct = 100;
-      } else {
-        statusLabel = `PENDING ${todayStats.done}/${todayStats.total}`; statusClass = 'badge-purple'; progressPct = Math.round(todayStats.ratio * 100);
-      }
-    } else {
-      // Pure manual habit, no tasks ever linked — fall back to the day-dot flag entirely
-      const doneToday = h.days[todayIdx] || false;
-      statusLabel = doneToday ? '✓ DONE' : 'PENDING';
-      statusClass = doneToday ? 'badge-green' : 'badge-purple';
-      progressPct = doneToday ? 100 : 0;
-    }
+    const { statusLabel, statusClass, progressPct, todayStats, isTaskDriven } = computeHabitTodayStatus(h);
 
     // Weekly mini progress bars (Mon-Sun): each day uses task stats if that habit had tasks
     // that day, otherwise falls back to the manual flag for that day.
@@ -1372,6 +1501,7 @@ function renderHabits() {
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <div class="badge ${statusClass}">${statusLabel}</div>
+          <div class="edit-target" onclick="openAddTaskForHabit(${h.id})" aria-label="Add task for ${h.name}">➕</div>
           <div class="edit-target" onclick="openEditHabitModal(${h.id})" aria-label="Edit ${h.name}">✎</div>
         </div>
       </div>
@@ -1552,6 +1682,28 @@ function selectMood(el) {
 function openAddModal() { document.getElementById('addModal').classList.add('open'); }
 function closeAddModal() { document.getElementById('addModal').classList.remove('open'); }
 function closeModalOnBg(e) { if (e.target === document.getElementById('addModal')) closeAddModal(); }
+
+// Quick-add entry point from a habit's "+" icon. Opens the same Add modal used everywhere else
+// (so all existing validation, Enter-key support, and addTask() logic is reused as-is), but
+// switches straight to the Task tab and pre-selects this habit in the link dropdown — skipping
+// the extra step of manually opening the dropdown and finding the right habit in a longer list.
+function openAddTaskForHabit(habitId) {
+  openAddModal();
+  const taskChip = document.querySelector('#addTypeTabs .chip[data-type="task"]');
+  switchAddType('task', taskChip);
+
+  // The habit dropdown is rebuilt by renderHabits()/renderTaskHabitOptions() on every habit
+  // change, so it should already be current — but re-render defensively in case this is somehow
+  // called right after a habit was added elsewhere without an intervening render.
+  renderTaskHabitOptions();
+  const habitSelect = document.getElementById('taskHabitLink');
+  if (habitSelect.querySelector(`option[value="${habitId}"]`)) {
+    habitSelect.value = String(habitId);
+  }
+
+  // Focus the task name field immediately so the person can just start typing.
+  document.getElementById('taskInput').focus();
+}
 
 function switchAddType(type, el) {
   document.querySelectorAll('#addTypeTabs .chip').forEach(c => c.classList.remove('active'));
