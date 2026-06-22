@@ -13,7 +13,7 @@
 <title>PLANR ✦ Aesthetic Planner</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 
 <style>
   /* ── TOKENS ── */
@@ -40,7 +40,7 @@
     --radius:      18px;
     --radius-lg:   26px;
 
-    --font-display: 'Syne', sans-serif;
+    --font-display: 'Space Grotesk', sans-serif;
     --font-body:    'Space Grotesk', sans-serif;
     --font-mono:    'JetBrains Mono', monospace;
 
@@ -115,7 +115,7 @@
   }
   .topbar-logo {
     font-family: var(--font-display);
-    font-size: 22px; font-weight: 800; letter-spacing: -1px;
+    font-size: 22px; font-weight: 700; letter-spacing: -0.2px;
     background: linear-gradient(120deg, var(--neon-purple), var(--neon-pink));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
@@ -152,8 +152,8 @@
     color: var(--neon-purple); margin-bottom: 10px; display: block;
   }
   .sec-title {
-    font-family: var(--font-display); font-size: 20px; font-weight: 800;
-    letter-spacing: -0.5px; margin-bottom: 14px;
+    font-family: var(--font-display); font-size: 20px; font-weight: 700;
+    letter-spacing: -0.2px; margin-bottom: 14px;
   }
 
   /* ── BADGE / TAG ── */
@@ -342,7 +342,7 @@
     display: flex; flex-direction: column; gap: 6px;
   }
   .stat-num {
-    font-family: var(--font-display); font-size: 28px; font-weight: 800;
+    font-family: var(--font-display); font-size: 28px; font-weight: 700;
     background: linear-gradient(120deg, var(--neon-purple), var(--neon-pink));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
@@ -431,7 +431,7 @@
     background: var(--border); margin: 0 auto 20px;
   }
   .modal-title {
-    font-family: var(--font-display); font-size: 20px; font-weight: 800;
+    font-family: var(--font-display); font-size: 20px; font-weight: 700;
     margin-bottom: 18px;
   }
 
@@ -521,7 +521,7 @@
   .streak-row { display: flex; gap: 6px; align-items: center; }
   .flame { font-size: 18px; animation: flicker 1.4s ease-in-out infinite alternate; }
   @keyframes flicker { from { opacity: .8; transform: scale(1); } to { opacity: 1; transform: scale(1.1); } }
-  .streak-num { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--neon-yellow); }
+  .streak-num { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--neon-yellow); }
   .streak-label { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 
   /* spacing helpers */
@@ -555,7 +555,7 @@
   @keyframes ob-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
   .onboarding-emoji { font-size: 40px; margin-bottom: 16px; }
-  .onboarding-title { font-family: var(--font-display); font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .onboarding-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; margin-bottom: 8px; }
   .onboarding-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; line-height: 1.5; }
   .onboarding-input { text-align: center; font-size: 16px; margin-bottom: 0; }
 
@@ -1100,6 +1100,27 @@
   </div>
 </div>
 
+<!-- EDIT TASK MODAL -->
+<div class="modal-overlay" id="editTaskModal" onclick="closeEditTaskModalOnBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="editTaskModalTitle">Edit Task ✦</div>
+
+    <input class="input" id="editTaskName" placeholder="Task name" type="text" aria-label="Task name"/>
+    <select class="input" id="editTaskPriority" aria-label="Task priority">
+      <option value="high">🔴 High Priority</option>
+      <option value="med">🟡 Medium Priority</option>
+      <option value="low">🟢 Low Priority</option>
+    </select>
+    <div class="field-label">Time (optional)</div>
+    <input class="input" id="editTaskTime" type="time" aria-label="Task time"/>
+
+    <button class="btn btn-primary btn-full" onclick="saveEditedTask()">Save Changes ✦</button>
+    <div class="gap8"></div>
+    <button class="btn btn-ghost btn-full" onclick="deleteTaskFromEdit()" style="color:var(--neon-pink);">🗑 Delete Task</button>
+  </div>
+</div>
+
 <!-- CONFIRM MODAL (replaces native browser confirm(), which can be unreliable inside an installed PWA) -->
 <div class="modal-overlay" id="confirmModal" onclick="closeConfirmModalOnBg(event)">
   <div class="modal-sheet">
@@ -1243,6 +1264,7 @@ function renderTasks() {
                   <div class="task-meta">${t.time || ''} ${t.priority === 'high' ? '· 🔴 HIGH' : t.priority === 'low' ? '· 🟢 LOW' : '· 🟡 MED'}</div>
                   <div class="task-done-badge">✓ Done</div>
                 </div>
+                <div class="edit-target" onclick="event.stopPropagation(); openEditTaskModal(${t.id})" aria-label="Edit ${t.text}">✎</div>
               </div>
             `).join('')}
           </div>
@@ -1270,6 +1292,7 @@ function renderTasks() {
                 <div class="task-meta">${t.time || ''} ${t.priority === 'high' ? '· 🔴 HIGH' : t.priority === 'low' ? '· 🟢 LOW' : '· 🟡 MED'}</div>
                 <div class="task-done-badge">✓ Done</div>
               </div>
+              <div class="edit-target" onclick="event.stopPropagation(); openEditTaskModal(${t.id})" aria-label="Edit ${t.text}">✎</div>
             </div>
           `).join('')}
         </div>
@@ -1654,6 +1677,71 @@ function deleteHabitFromEdit() {
   showConfirm('Delete this habit?', `"${habit.name}" and its streak history will be permanently removed.`, () => {
     state.habits = state.habits.filter(h => h.id !== habitId);
     renderHabits();
+    saveState();
+  });
+}
+
+// ── EDIT TASK MODAL ── (covers both standalone tasks and habit sub-tasks, same modal either way)
+let editingTaskId = null;
+
+function openEditTaskModal(id) {
+  const t = state.tasks.find(t => t.id === id);
+  if (!t) return;
+  editingTaskId = id;
+
+  document.getElementById('editTaskName').value = t.text;
+  document.getElementById('editTaskPriority').value = t.priority || 'med';
+  // t.time is stored as a display string like "6:00 PM" or "Anytime" — convert back to the
+  // 24h "HH:MM" the <input type="time"> needs, using the sortKey we already keep for exactly
+  // this kind of round-trip (sortKey stays in 24h form even when display text says "Anytime").
+  document.getElementById('editTaskTime').value = (t.sortKey && t.sortKey !== '99:99') ? t.sortKey : '';
+
+  // If this task belongs to a habit, reflect that in the modal title so it's clear what's
+  // being edited — purely informational, the habit link itself isn't editable here.
+  const habit = t.habitId ? state.habits.find(h => h.id === t.habitId) : null;
+  document.getElementById('editTaskModalTitle').textContent = habit ? `Edit "${habit.name}" Task ✦` : 'Edit Task ✦';
+
+  document.getElementById('editTaskModal').classList.add('open');
+}
+
+function closeEditTaskModal() {
+  document.getElementById('editTaskModal').classList.remove('open');
+  editingTaskId = null;
+}
+
+function closeEditTaskModalOnBg(e) {
+  if (e.target === document.getElementById('editTaskModal')) closeEditTaskModal();
+}
+
+function saveEditedTask() {
+  const t = state.tasks.find(t => t.id === editingTaskId);
+  if (!t) return;
+  const text = document.getElementById('editTaskName').value.trim();
+  if (!text) return; // don't allow saving an empty task name
+
+  const rawTime = document.getElementById('editTaskTime').value;
+  const formatted = formatTime24to12(rawTime);
+
+  t.text = text;
+  t.priority = document.getElementById('editTaskPriority').value;
+  t.time = formatted ? formatted.display : 'Anytime';
+  t.sortKey = formatted ? formatted.sortKey : '99:99';
+
+  state.tasks.sort((a, b) => (a.sortKey || '99:99').localeCompare(b.sortKey || '99:99'));
+  renderTasks();
+  saveState();
+  closeEditTaskModal();
+}
+
+function deleteTaskFromEdit() {
+  const taskId = editingTaskId; // capture before closeEditTaskModal() clears it
+  const t = state.tasks.find(t => t.id === taskId);
+  if (!t) return;
+
+  closeEditTaskModal(); // close the edit sheet first so only one modal is ever visible at a time
+  showConfirm('Delete this task?', `"${t.text}" will be permanently removed.`, () => {
+    state.tasks = state.tasks.filter(t => t.id !== taskId);
+    renderTasks();
     saveState();
   });
 }
@@ -2517,6 +2605,7 @@ document.getElementById('taskInput').addEventListener('keydown', e => { if (e.ke
 document.getElementById('blockTitle').addEventListener('keydown', e => { if (e.key === 'Enter') addBlock(); });
 document.getElementById('habitName').addEventListener('keydown', e => { if (e.key === 'Enter') addHabit(); });
 document.getElementById('editHabitName').addEventListener('keydown', e => { if (e.key === 'Enter') saveEditedHabit(); });
+document.getElementById('editTaskName').addEventListener('keydown', e => { if (e.key === 'Enter') saveEditedTask(); });
 ['obName', 'obAge', 'obHeight', 'obWeight'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') onboardingNext(); });
 });
@@ -2545,6 +2634,11 @@ function enhanceClickableDivs(root = document) {
 
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
+        e.stopPropagation(); // stop the keydown itself from bubbling to a parent clickable div
+        // (e.g. a nested edit/delete icon inside a tappable task row) — otherwise activating
+        // this element via keyboard would ALSO trigger the parent's own click handler, which
+        // mouse clicks never do since stopPropagation() on a click handler doesn't retroactively
+        // stop a keydown that already bubbled past it.
         el.click();
       }
     });
