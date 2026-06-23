@@ -911,59 +911,20 @@
         </div>
       </div>
 
-      <!-- Personal stats (from onboarding) -->
-      <div class="card" style="margin-bottom:16px" id="profilePersonalCard">
-        <span class="sec-label">✦ ABOUT YOU</span>
-        <div id="profilePersonalStats"></div>
+      <!-- Stats (computed from real data) -->
+      <div class="stats-row" style="margin-bottom:16px" id="profileStatsRow1"></div>
+      <div class="stats-row" style="margin-bottom:16px" id="profileStatsRow2"></div>
+
+      <!-- Habit Consistency Report -->
+      <div class="card card-glow" style="margin-bottom:16px">
+        <span class="sec-label">✦ HABIT CONSISTENCY (LAST 30 DAYS)</span>
+        <div id="consistencyReport"></div>
       </div>
 
-      <!-- Stats -->
-      <div class="stats-row" style="margin-bottom:16px">
-        <div class="stat-card">
-          <div class="stat-num">47</div>
-          <div class="stat-label">TOTAL TASKS</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num">12</div>
-          <div class="stat-label">HABITS BUILT</div>
-        </div>
-      </div>
-      <div class="stats-row" style="margin-bottom:16px">
-        <div class="stat-card">
-          <div class="stat-num">7</div>
-          <div class="stat-label">DAY STREAK</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num">91%</div>
-          <div class="stat-label">COMPLETION</div>
-        </div>
-      </div>
-
-      <!-- Achievements -->
+      <!-- Achievements (real, unlocked based on actual progress) -->
       <div class="card" style="margin-bottom:16px">
         <span class="sec-label">✦ ACHIEVEMENTS</span>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="card card-sm" style="text-align:center">
-            <div style="font-size:28px;margin-bottom:6px">🏆</div>
-            <div style="font-size:12px;font-weight:600">First Week</div>
-            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">7-DAY STREAK</div>
-          </div>
-          <div class="card card-sm" style="text-align:center">
-            <div style="font-size:28px;margin-bottom:6px">⚡</div>
-            <div style="font-size:12px;font-weight:600">Speed Runner</div>
-            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">10 TASKS/DAY</div>
-          </div>
-          <div class="card card-sm" style="text-align:center">
-            <div style="font-size:28px;margin-bottom:6px">🌙</div>
-            <div style="font-size:12px;font-weight:600">Night Owl</div>
-            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">LATE PLANNER</div>
-          </div>
-          <div class="card card-sm" style="text-align:center;opacity:.4">
-            <div style="font-size:28px;margin-bottom:6px">👑</div>
-            <div style="font-size:12px;font-weight:600">Legend</div>
-            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">30-DAY STREAK</div>
-          </div>
-        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="achievementsGrid"></div>
       </div>
 
       <div class="gap16"></div>
@@ -1185,6 +1146,11 @@ function navigate(screen) {
   // show/hide FAB
   document.getElementById('fab').style.display = screen === 'profile' ? 'none' : 'grid';
   state.currentScreen = screen;
+
+  // Profile's stats/consistency report/achievements are all derived from tasks and habits that
+  // could have changed on any other screen since the last time Profile was rendered — refresh
+  // it on every visit so it's never showing stale numbers from whenever it last happened to run.
+  if (screen === 'profile' && hasCompletedOnboarding()) renderProfile();
 }
 
 // ── RENDER TODAY ──
@@ -1436,6 +1402,66 @@ function habitHasAnyTasks(habitId) {
   return state.tasks.some(t => t.habitId === habitId);
 }
 
+// Whether a habit was fully completed on a given date — for task-driven habits, every task that
+// day must be done; for pure manual habits (never linked to any task), falls back to the day-dot
+// flag. Used by both the real streak calculator and the 30-day consistency report below, so
+// "completed" means the same thing everywhere it's measured.
+function wasHabitCompletedOn(habit, dateStr) {
+  if (habitHasAnyTasks(habit.id)) {
+    const stats = getHabitDayStats(habit.id, dateStr);
+    return stats.hasTasks && stats.done === stats.total;
+  }
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayIdx = ((d.getDay() + 6) % 7); // Mon=0, matches habit.days indexing used elsewhere
+  return habit.days[dayIdx] || false;
+}
+
+// Real current streak: counts consecutive completed days working backwards from today. Stops
+// at the first day that wasn't completed. This replaces the old `habit.streak` field, which was
+// set to 0 on creation and never updated again — effectively permanent fake data.
+function calculateRealStreak(habit) {
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) { // hard cap so this can never loop forever on bad data
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    if (wasHabitCompletedOn(habit, dateStr)) streak++;
+    else break;
+  }
+  return streak;
+}
+
+// 30-day (or however many days the habit has actually existed, if fewer) consistency percentage.
+// Only counts days from the habit's creation onward — a habit created 3 days ago is judged over
+// those 3 days, not penalized for the 27 days before it existed.
+function calculateHabitConsistency(habit) {
+  const today = new Date();
+  let completedDays = 0;
+  let totalDaysToCheck = 0;
+
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+
+    // Only count a day if the habit could plausibly have been actioned that day — i.e. it
+    // already existed by then. We approximate "existed" as: has any task on/before that date,
+    // OR for pure manual habits, just count every day in the window (no creation-date field
+    // exists for manual habits, so we can't know precisely — this is a deliberate, documented
+    // limitation rather than a silent wrong answer).
+    const hasHistoryBeforeOrOn = state.tasks.some(t => t.habitId === habit.id && t.date <= dateStr);
+    const isTaskDriven = habitHasAnyTasks(habit.id);
+    if (isTaskDriven && !hasHistoryBeforeOrOn) continue; // habit didn't exist yet on this day
+
+    totalDaysToCheck++;
+    if (wasHabitCompletedOn(habit, dateStr)) completedDays++;
+  }
+
+  if (totalDaysToCheck === 0) return { pct: 0, daysTracked: 0 };
+  return { pct: Math.round((completedDays / totalDaysToCheck) * 100), daysTracked: totalDaysToCheck };
+}
+
 // Computes a habit's Done/Pending/Missed status + progress % for "today", using the same logic
 // in both renderHabits() (Habits screen) and renderTasks() (Today screen's collapsed habit
 // groups), so the two screens can never silently drift out of sync with each other.
@@ -1519,7 +1545,7 @@ function renderHabits() {
           <div class="habit-icon">${h.icon}</div>
           <div>
             <div class="habit-name">${h.name}</div>
-            <div class="habit-streak">🔥 ${h.streak} day streak${linkedBlock ? ` · 🔔 ${linkedBlock.start}` : ''}</div>
+            <div class="habit-streak">🔥 ${calculateRealStreak(h)} day streak${linkedBlock ? ` · 🔔 ${linkedBlock.start}` : ''}</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:4px">
@@ -2316,26 +2342,139 @@ function renderProfile() {
     document.getElementById('profileGoalBadge').insertAdjacentHTML('beforeend', badgeHtml);
   }
 
-  const personalStats = document.getElementById('profilePersonalStats');
+  // BMI badge: a single neutral data point near the top, not a dedicated section — kept brief
+  // and plainly worded (no appearance-based framing), consistent with how it's always been shown.
   if (p.heightCm && p.weightKg) {
     const bmi = calculateBMI(p.heightCm, p.weightKg);
-    personalStats.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-        <div class="card card-sm" style="text-align:center">
-          <div style="font-size:18px;font-weight:700">${p.heightCm} cm</div>
-          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">HEIGHT</div>
+    const bmiBadgeHtml = `<div class="badge badge-purple">BMI ${bmi.value} · ${bmi.category}</div>`;
+    document.getElementById('profileGoalBadge').insertAdjacentHTML('beforeend', bmiBadgeHtml);
+  }
+
+  renderProfileStats();
+  renderConsistencyReport();
+  renderAchievements();
+}
+
+// Real stats computed from actual state — replaces the old hardcoded 47/12/7/91% placeholders.
+function renderProfileStats() {
+  const totalTasksCompleted = state.tasks.filter(t => t.done).length;
+  const totalHabits = state.habits.length;
+
+  const longestCurrentStreak = state.habits.length
+    ? Math.max(0, ...state.habits.map(h => calculateRealStreak(h)))
+    : 0;
+
+  const allTimeTasksTotal = state.tasks.length;
+  const overallCompletionPct = allTimeTasksTotal
+    ? Math.round((totalTasksCompleted / allTimeTasksTotal) * 100)
+    : 0;
+
+  document.getElementById('profileStatsRow1').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-num">${totalTasksCompleted}</div>
+      <div class="stat-label">TASKS COMPLETED</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${totalHabits}</div>
+      <div class="stat-label">HABITS BUILT</div>
+    </div>
+  `;
+  document.getElementById('profileStatsRow2').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-num">${longestCurrentStreak}</div>
+      <div class="stat-label">BEST CURRENT STREAK</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${overallCompletionPct}%</div>
+      <div class="stat-label">COMPLETION RATE</div>
+    </div>
+  `;
+}
+
+// Habit consistency report — grouped by real status over the last 30 days (or however many
+// days a habit has actually existed, if fewer): Crushing It / Needs Attention / Just Started.
+function renderConsistencyReport() {
+  const container = document.getElementById('consistencyReport');
+  if (!state.habits.length) {
+    container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;">No habits yet — add one to start tracking your consistency ✦</div>';
+    return;
+  }
+
+  const crushing = [], needsAttention = [], justStarted = [];
+  state.habits.forEach(h => {
+    const { pct, daysTracked } = calculateHabitConsistency(h);
+    const entry = { habit: h, pct, daysTracked };
+    // "Just started" means there isn't enough real history yet to judge fairly — fewer than
+    // 3 tracked days. This avoids declaring a brand-new habit "Needs Attention" after a single
+    // missed day, which would be a discouraging, statistically meaningless judgment.
+    if (daysTracked < 3) justStarted.push(entry);
+    else if (pct >= 70) crushing.push(entry);
+    else needsAttention.push(entry);
+  });
+
+  // Within each group, show strongest first so the most encouraging info is immediately visible.
+  crushing.sort((a, b) => b.pct - a.pct);
+  needsAttention.sort((a, b) => b.pct - a.pct);
+
+  const renderGroup = (title, icon, badgeClass, entries) => {
+    if (!entries.length) return '';
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+          <span>${icon}</span><span>${title}</span>
+          <span class="badge ${badgeClass}" style="margin-left:auto;">${entries.length}</span>
         </div>
-        <div class="card card-sm" style="text-align:center">
-          <div style="font-size:18px;font-weight:700">${p.weightKg} kg</div>
-          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">WEIGHT</div>
-        </div>
-      </div>
-      <div class="card card-sm" style="text-align:center">
-        <div style="font-size:18px;font-weight:700">${bmi.value}</div>
-        <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">BMI · ${bmi.category.toUpperCase()}</div>
+        ${entries.map(({ habit, pct, daysTracked }) => `
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+              <div style="font-size:13px;display:flex;align-items:center;gap:6px;"><span>${habit.icon}</span><span>${habit.name}</span></div>
+              <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);">${daysTracked < 3 ? `${daysTracked}d tracked` : pct + '%'}</div>
+            </div>
+            ${daysTracked >= 3 ? `<div class="prog-wrap"><div class="prog-fill ${pct >= 70 ? 'prog-cyan' : 'prog-purple'}" style="width:${pct}%"></div></div>` : ''}
+          </div>
+        `).join('')}
       </div>
     `;
-  }
+  };
+
+  container.innerHTML = [
+    renderGroup('Crushing It', '🔥', 'badge-green', crushing),
+    renderGroup('Needs Attention', '⚠', 'badge-pink', needsAttention),
+    renderGroup('Just Started', '🌱', 'badge-purple', justStarted),
+  ].join('');
+}
+
+// Real achievements — each one checks actual state and only unlocks when genuinely earned.
+// Locked achievements are shown dimmed with a 🔒, same as before, but now the lock state is
+// real instead of one hardcoded example.
+function renderAchievements() {
+  const totalTasksCompleted = state.tasks.filter(t => t.done).length;
+  const longestStreak = state.habits.length ? Math.max(0, ...state.habits.map(h => calculateRealStreak(h))) : 0;
+  const tasksCompletedInOneDay = (() => {
+    const counts = {};
+    state.tasks.forEach(t => { if (t.done && t.date) counts[t.date] = (counts[t.date] || 0) + 1; });
+    return Math.max(0, ...Object.values(counts));
+  })();
+  const hasLateNightTask = state.tasks.some(t => {
+    if (!t.sortKey || t.sortKey === '99:99') return false;
+    const hour = parseInt(t.sortKey.split(':')[0], 10);
+    return hour >= 21 || hour < 5; // 9 PM - 5 AM counts as "late"
+  });
+
+  const achievements = [
+    { icon: '🏆', name: 'First Week', sub: '7-DAY STREAK', unlocked: longestStreak >= 7 },
+    { icon: '⚡', name: 'Speed Runner', sub: '10 TASKS IN ONE DAY', unlocked: tasksCompletedInOneDay >= 10 },
+    { icon: '🌙', name: 'Night Owl', sub: 'LATE-NIGHT PLANNER', unlocked: hasLateNightTask },
+    { icon: '👑', name: 'Legend', sub: '30-DAY STREAK', unlocked: longestStreak >= 30 },
+  ];
+
+  document.getElementById('achievementsGrid').innerHTML = achievements.map(a => `
+    <div class="card card-sm" style="text-align:center;${a.unlocked ? '' : 'opacity:.4'}">
+      <div style="font-size:28px;margin-bottom:6px;">${a.unlocked ? a.icon : '🔒'}</div>
+      <div style="font-size:12px;font-weight:600">${a.name}</div>
+      <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${a.sub}</div>
+    </div>
+  `).join('');
 }
 
 
