@@ -614,6 +614,71 @@
   }
   .onboarding-no-habits-msg { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); text-align: center; padding: 16px 0; }
 
+  /* ── HABIT CONSISTENCY REPORT (premium redesign) ── */
+  .consistency-summary {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px; margin-bottom: 18px; border-radius: var(--radius);
+    background: linear-gradient(135deg, rgba(160,110,255,.10), rgba(255,95,203,.06));
+    border: 1px solid rgba(160,110,255,.2);
+  }
+  .consistency-summary-ring { flex-shrink: 0; }
+  .consistency-summary-text { flex: 1; }
+  .consistency-summary-num {
+    font-family: var(--font-display); font-size: 28px; font-weight: 700;
+    background: linear-gradient(120deg, var(--neon-purple), var(--neon-pink));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1;
+  }
+  .consistency-summary-label { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; letter-spacing: .3px; }
+
+  .consistency-group { margin-bottom: 20px; }
+  .consistency-group:last-child { margin-bottom: 0; }
+  .consistency-group-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
+  .consistency-group-icon-wrap {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 13px;
+  }
+  .consistency-group-title { font-size: 13px; font-weight: 600; flex: 1; }
+  .consistency-group-count {
+    font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);
+    background: var(--glass-mid); border: 1px solid var(--border);
+    border-radius: 99px; padding: 2px 9px;
+  }
+
+  .consistency-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px; border-radius: var(--radius-sm);
+    background: var(--glass); border: 1px solid var(--border);
+    margin-bottom: 8px; position: relative; overflow: hidden;
+    transition: border-color .2s, transform .15s;
+  }
+  .consistency-card:last-child { margin-bottom: 0; }
+  .consistency-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  }
+  .consistency-card-crushing::before { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+  .consistency-card-attention::before { background: var(--neon-pink); box-shadow: 0 0 8px var(--neon-pink); }
+  .consistency-card-started::before { background: var(--neon-purple); box-shadow: 0 0 8px var(--neon-purple); }
+
+  .consistency-ring-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
+  .consistency-ring-wrap svg { transform: rotate(-90deg); }
+  .consistency-ring-track { fill: none; stroke: rgba(255,255,255,.07); }
+  .consistency-ring-fill { fill: none; stroke-linecap: round; transition: stroke-dashoffset .6s cubic-bezier(.4,0,.2,1); }
+  .consistency-ring-pct {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 13px; font-weight: 700;
+  }
+  .consistency-ring-days {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); text-align: center; line-height: 1.2;
+  }
+
+  .consistency-card-info { flex: 1; min-width: 0; }
+  .consistency-card-name { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .consistency-card-meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+
   #installBanner {
     position: fixed; top: 12px; left: 12px; right: 12px; z-index: 100;
     background: rgba(13,13,26,.95); border: 1px solid var(--neon-purple);
@@ -2393,6 +2458,23 @@ function renderProfileStats() {
 
 // Habit consistency report — grouped by real status over the last 30 days (or however many
 // days a habit has actually existed, if fewer): Crushing It / Needs Attention / Just Started.
+// Builds an SVG ring (circular progress indicator) sized to fit inline wherever it's called.
+// radius/strokeWidth are fixed per call site so the math (circumference, dash offset) stays
+// correct regardless of how the ring is being used (summary ring vs. per-habit ring).
+function buildProgressRing(pct, size, strokeWidth, colorVar) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (pct / 100) * circumference;
+  const center = size / 2;
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle class="consistency-ring-track" cx="${center}" cy="${center}" r="${radius}" stroke-width="${strokeWidth}"/>
+      <circle class="consistency-ring-fill" cx="${center}" cy="${center}" r="${radius}" stroke-width="${strokeWidth}"
+        stroke="${colorVar}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"/>
+    </svg>
+  `;
+}
+
 function renderConsistencyReport() {
   const container = document.getElementById('consistencyReport');
   if (!state.habits.length) {
@@ -2416,32 +2498,67 @@ function renderConsistencyReport() {
   crushing.sort((a, b) => b.pct - a.pct);
   needsAttention.sort((a, b) => b.pct - a.pct);
 
-  const renderGroup = (title, icon, badgeClass, entries) => {
-    if (!entries.length) return '';
+  // Summary ring: average consistency across every habit that has enough history to judge
+  // (matches the same >= 3 days threshold used for individual habits, for consistency).
+  const judgedEntries = [...crushing, ...needsAttention];
+  const avgPct = judgedEntries.length
+    ? Math.round(judgedEntries.reduce((sum, e) => sum + e.pct, 0) / judgedEntries.length)
+    : 0;
+  const summaryColor = avgPct >= 70 ? 'var(--neon-green)' : avgPct > 0 ? 'var(--neon-purple)' : 'var(--text-dim)';
+
+  let html = `
+    <div class="consistency-summary">
+      <div class="consistency-summary-ring" style="position:relative;width:64px;height:64px;">
+        ${buildProgressRing(avgPct, 64, 6, summaryColor)}
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:17px;font-weight:700;">${judgedEntries.length ? avgPct + '%' : '–'}</div>
+      </div>
+      <div class="consistency-summary-text">
+        <div class="consistency-summary-num">${state.habits.length} habit${state.habits.length !== 1 ? 's' : ''}</div>
+        <div class="consistency-summary-label">${judgedEntries.length ? `Averaging ${avgPct}% consistency over the last 30 days` : 'Still building up tracking history ✦'}</div>
+      </div>
+    </div>
+  `;
+
+  const renderCard = (entry, cardClass, ringColor) => {
+    const { habit, pct, daysTracked } = entry;
+    const showPct = daysTracked >= 3;
     return `
-      <div style="margin-bottom:14px;">
-        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-          <span>${icon}</span><span>${title}</span>
-          <span class="badge ${badgeClass}" style="margin-left:auto;">${entries.length}</span>
+      <div class="consistency-card ${cardClass}">
+        <div class="consistency-ring-wrap">
+          ${buildProgressRing(showPct ? pct : 0, 52, 5, ringColor)}
+          ${showPct
+            ? `<div class="consistency-ring-pct">${pct}%</div>`
+            : `<div class="consistency-ring-days">${daysTracked}d<br/>tracked</div>`}
         </div>
-        ${entries.map(({ habit, pct, daysTracked }) => `
-          <div style="margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-              <div style="font-size:13px;display:flex;align-items:center;gap:6px;"><span>${habit.icon}</span><span>${habit.name}</span></div>
-              <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);">${daysTracked < 3 ? `${daysTracked}d tracked` : pct + '%'}</div>
-            </div>
-            ${daysTracked >= 3 ? `<div class="prog-wrap"><div class="prog-fill ${pct >= 70 ? 'prog-cyan' : 'prog-purple'}" style="width:${pct}%"></div></div>` : ''}
-          </div>
-        `).join('')}
+        <div class="consistency-card-info">
+          <div class="consistency-card-name"><span>${habit.icon}</span><span>${habit.name}</span></div>
+          <div class="consistency-card-meta">${showPct ? `${daysTracked}-day window` : 'Building history'}</div>
+        </div>
       </div>
     `;
   };
 
-  container.innerHTML = [
-    renderGroup('Crushing It', '🔥', 'badge-green', crushing),
-    renderGroup('Needs Attention', '⚠', 'badge-pink', needsAttention),
-    renderGroup('Just Started', '🌱', 'badge-purple', justStarted),
+  const renderGroup = (title, icon, iconBg, entries, cardClass, ringColor) => {
+    if (!entries.length) return '';
+    return `
+      <div class="consistency-group">
+        <div class="consistency-group-header">
+          <div class="consistency-group-icon-wrap" style="background:${iconBg};">${icon}</div>
+          <div class="consistency-group-title">${title}</div>
+          <div class="consistency-group-count">${entries.length}</div>
+        </div>
+        ${entries.map(e => renderCard(e, cardClass, ringColor)).join('')}
+      </div>
+    `;
+  };
+
+  html += [
+    renderGroup('Crushing It', '🔥', 'rgba(57,255,136,.12)', crushing, 'consistency-card-crushing', 'var(--neon-green)'),
+    renderGroup('Needs Attention', '⚠', 'rgba(255,95,203,.12)', needsAttention, 'consistency-card-attention', 'var(--neon-pink)'),
+    renderGroup('Just Started', '🌱', 'rgba(160,110,255,.12)', justStarted, 'consistency-card-started', 'var(--neon-purple)'),
   ].join('');
+
+  container.innerHTML = html;
 }
 
 // Real achievements — each one checks actual state and only unlocks when genuinely earned.
