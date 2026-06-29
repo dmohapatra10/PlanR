@@ -45,6 +45,7 @@
     --font-mono:    'JetBrains Mono', monospace;
 
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -690,6 +691,27 @@
   .install-icon { font-size: 28px; flex-shrink: 0; }
   .install-text { flex: 1; }
   .install-text strong { display: block; font-size: 13px; margin-bottom: 2px; }
+
+  /* ── NOTIFICATION BELL (fixed, top-right, visible on every screen) ── */
+  .notif-bell {
+    position: fixed; top: calc(14px + var(--safe-top)); right: 14px; z-index: 95;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(13,13,26,.85); border: 1px solid var(--border);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    display: grid; place-items: center; font-size: 15px;
+    cursor: pointer; transition: border-color .2s, background .2s, transform .15s;
+    box-shadow: 0 2px 12px rgba(0,0,0,.3);
+  }
+  .notif-bell:active { transform: scale(.92); }
+  .notif-bell.enabled {
+    border-color: var(--neon-purple); background: rgba(160,110,255,.18);
+    box-shadow: 0 0 12px rgba(160,110,255,.3);
+  }
+  .notif-bell:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Push topbar content left on every screen so its rightmost element (avatar/badge/streak)
+     never sits directly under the fixed bell, regardless of scroll position. */
+  .topbar { padding-right: 44px; }
   .install-text span { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
   .install-btn {
     background: var(--neon-purple); color: #fff;
@@ -942,15 +964,6 @@
         <div id="habitList"></div>
       </div>
 
-      <!-- Notification toggle -->
-      <div class="card" style="margin-bottom:16px">
-        <span class="sec-label">✦ REMINDERS</span>
-        <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);line-height:1.6;margin-bottom:12px;">
-          Get notified when a linked habit's scheduled time arrives. Link a habit to a schedule block when adding it. Works while PLANR is open or running in a background tab.
-        </div>
-        <button class="btn btn-primary btn-full" id="notifToggleBtn" onclick="toggleNotifications()">🔕 Enable habit reminders</button>
-      </div>
-
       <div class="gap16"></div>
     </div>
 
@@ -998,6 +1011,11 @@
 
   <!-- FAB -->
   <button class="fab" id="fab" onclick="openAddModal()">+</button>
+
+  <!-- NOTIFICATION BELL: floats consistently on every screen, inside the app shell (same
+       positioning context as the FAB above, which is known to render reliably). Tapping it
+       enables/disables habit reminders, reusing the exact same permission + engine logic. -->
+  <button class="notif-bell" id="notifBellBtn" onclick="toggleNotifications()" aria-label="Enable habit reminders">🔕</button>
 
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
@@ -2788,17 +2806,21 @@ async function toggleNotifications() {
 }
 
 function renderNotifToggle() {
-  const btn = document.getElementById('notifToggleBtn');
+  const btn = document.getElementById('notifBellBtn');
   if (!btn) return;
   const supported = 'Notification' in window;
   if (!supported) {
-    btn.textContent = '🔔 Not supported in this browser';
+    btn.textContent = '🔕';
+    btn.title = 'Notifications not supported in this browser';
+    btn.setAttribute('aria-label', 'Notifications not supported in this browser');
     btn.disabled = true;
     return;
   }
-  btn.textContent = state.notifsEnabled ? '🔔 Habit reminders ON' : '🔕 Enable habit reminders';
-  btn.classList.toggle('btn-primary', !state.notifsEnabled);
-  btn.classList.toggle('btn-ghost', state.notifsEnabled);
+  btn.textContent = state.notifsEnabled ? '🔔' : '🔕';
+  btn.classList.toggle('enabled', state.notifsEnabled);
+  const label = state.notifsEnabled ? 'Habit reminders are on — tap to turn off' : 'Turn on habit reminders';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 
 // ── INIT ──
